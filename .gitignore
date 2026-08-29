@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+/.pytest_cache/
+/.ruff_cache/
+/.mypy_cache/
+/.test-tmp/
+/.coverage
+/htmlcov/
+/build/
+/dist/
+/.venv/
+
+# IDE and OS files
+/.idea/
+/.vscode/
+.DS_Store
+Thumbs.db
+
+# Secrets and local configuration
+/.env
+/.env.*
+!/.env.example
+/config.yaml
+/config.local.yaml
+/config.*.local.yaml
+
+# Oracle wallets, network configuration, and private keys
+/wallet/
+/network/admin/
+*.sso
+*.p12
+*.pfx
+*.pem
+*.key
+tnsnames.ora
+sqlnet.ora
+
+# Generated reports and comprehensive operational logs
+/output/
+/logs/
+/relationships*.csv
+/relationship-report*.html
+*.log

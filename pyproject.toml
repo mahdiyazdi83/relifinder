@@ -1,0 +1,58 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "relifinder"
+version = "0.1.0"
+description = "Read-only, explainable relationship discovery for Oracle schemas without Foreign Keys"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+authors = [{ name = "mahdi yazdi" }]
+keywords = [
+  "oracle",
+  "database",
+  "schema-discovery",
+  "reverse-engineering",
+  "foreign-key",
+  "data-modeling",
+  "metadata-analysis",
+  "oracledb",
+]
+dependencies = [
+  "oracledb>=2.0,<4",
+  "PyYAML>=6.0,<7",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Topic :: Database",
+  "Topic :: Software Development :: Documentation",
+]
+
+[project.urls]
+Homepage = "https://github.com/mahdiyazdi83/relifinder"
+Repository = "https://github.com/mahdiyazdi83/relifinder.git"
+Issues = "https://github.com/mahdiyazdi83/relifinder/issues"
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+
+[project.scripts]
+oracle-relationship-discovery = "oracle_relationship_discovery.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/oracle_relationship_discovery"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100

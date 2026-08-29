@@ -1,0 +1,39 @@
+database:
+  host: localhost
+  port: 1521
+  service_name: ORCL
+  username: readonly_user
+  password_env: ORACLE_PASSWORD
+
+schemas:
+  - SCHEMA_A
+  - SCHEMA_B
+
+analysis:
+  metadata_candidate_threshold: 40
+  min_report_confidence: 40
+  generic_entities: [STATUS, TYPE, USER, CODE, CATEGORY, KIND]
+  weights:
+    name: 35
+    datatype: 15
+    target_key: 15
+    overlap: 25
+    consistency: 5
+    structure: 5
+
+sampling:
+  enabled: true
+  max_source_rows: 3000
+  max_target_rows: 5000
+  bind_batch_size: 500
+  mode: first
+
+performance:
+  max_workers: 2
+  candidate_validation_limit: 1000
+  query_timeout_seconds: 15
+
+output:
+  directory: output
+  # One append-only comprehensive log shared by every run.
+  log_file: logs/oracle-relationship-discovery.log

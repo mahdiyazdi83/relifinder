@@ -1,0 +1,1 @@
+"""Pure relationship inference logic."""
