@@ -246,11 +246,13 @@ output/
 │   ├── relationships.csv
 │   ├── relationship-report.html
 │   ├── schema-metadata.json
+│   ├── analysis-results.json
 │   └── erd/full.dbml
 └── 2026-08-29_10-42-11-654321_+0330_sampled/
     ├── relationships.csv
     ├── relationship-report.html
     ├── schema-metadata.json
+    ├── analysis-results.json
     └── erd/full.dbml
 
 logs/
@@ -277,18 +279,37 @@ The self-contained report works directly from disk and includes:
 
 ## ERD export
 
-ReliFinder can turn the relationships it already inferred into portable DBML for dbdiagram.io and other DBML-compatible viewers. DBML was selected because it is text-based, reviewable in version control, schema-aware, and widely supported. The exporter is a presentation layer only: it performs no database queries and never discovers or rescans relationships.
+ReliFinder discovers probable logical relationships; the ERD only visualizes those inferences. It never converts them into Oracle Foreign Key constraints. DBML is used because it is portable, reviewable text with native schema-qualified tables.
 
-> [!WARNING]
-> The generated ERD visualizes ReliFinder's inferred logical relationships. It does not represent declared Oracle Foreign Key constraints unless explicitly identified as such.
+### Architecture and privacy
+
+~~~text
+Oracle analysis
+      ↓
+analysis-results.json + schema-metadata.json
+      ↓
+ERD model and deterministic filters
+      ↓
+DBML exporter
+~~~
+
+Every new run writes two versioned, safe artifacts:
+
+- <code>analysis-results.json</code> contains every final analyzed relationship before the CSV report threshold, including score components and aggregate validation evidence.
+- <code>schema-metadata.json</code> contains schema, table, column, datatype, nullability, key, and constraint metadata.
+
+Neither artifact stores raw sampled values, credentials, or rows. ERD generation performs no extra Oracle query, and offline export makes no Oracle connection.
 
 ### Generate DBML during analysis
 
 ~~~bash
-oracle-relationship-discovery   --config config.yaml   analyze   --erd   --erd-format dbml   --erd-min-confidence 80
+oracle-relationship-discovery \
+  --config config.yaml \
+  analyze \
+  --erd \
+  --erd-format dbml \
+  --erd-min-confidence 80
 ~~~
-
-The default threshold is 80. CLI options override the <code>erd</code> section in YAML. Only final inferred relationships at or above the threshold are included; the threshold and aggregate evidence are recorded in the DBML comments.
 
 ~~~yaml
 erd:
@@ -299,40 +320,71 @@ erd:
   schemas: []
   max_relationships: null
   exclude_generic: false
+  include_isolated_tables: false
+  validation_statuses: [VALIDATED, NOT_RUN, SKIPPED]
 ~~~
 
-### Choose a scope
+CLI values override configuration. The default validation filter excludes <code>FAILED</code>, while retaining <code>VALIDATED</code>, <code>NOT_RUN</code>, and <code>SKIPPED</code>. <code>SKIPPED</code> is retained because it can mean sampling was intentionally disabled, no non-null bounded sample existed, or the operational validation limit was reached—not that the inferred metadata relationship is false.
 
-| Scope | Output | Meaning |
-|---|---|---|
-| <code>full</code> | <code>erd/full.dbml</code> | All qualifying relationships |
-| <code>schema</code> | <code>erd/schemas/SCHEMA.dbml</code> | One file per selected/configured schema; referenced external tables are marked |
-| <code>cross-schema</code> | <code>erd/cross-schema.dbml</code> | Only relationships crossing Oracle schema boundaries |
-
-Use <code>--erd-schema SCHEMA_A</code> repeatedly to focus the export. Use <code>--erd-max-relationships N</code> to cap large diagrams deterministically by confidence and qualified name. Generic lookup relationships remain included by default; <code>--erd-exclude-generic</code> removes recognized generic entities from visualization only.
-
-### Export an existing run without Oracle
-
-Every analysis writes a safe <code>schema-metadata.json</code> containing table, column, datatype, nullability, and key metadata—never sampled values. It enables a complete offline export:
+Override the allowed statuses by repeating the option:
 
 ~~~bash
-oracle-relationship-discovery export-erd   --input output/RUN/relationships.csv   --format dbml   --min-confidence 80   --scope cross-schema
+oracle-relationship-discovery --config config.yaml analyze --erd \
+  --erd-validation-status VALIDATED \
+  --erd-validation-status NOT_RUN
 ~~~
 
-The command automatically uses <code>schema-metadata.json</code> beside the CSV. Pass <code>--metadata PATH</code> to select another artifact. If metadata is unavailable, ReliFinder still creates a minimal DBML file from the columns present in the CSV.
+### Filtering pipeline
 
-Open the resulting <code>.dbml</code> file in a DBML-compatible viewer. The HTML report also lists generated files, scope, threshold, and relationship count.
+~~~text
+All final analyzed relationships
+  → exact directional deduplication
+  → confidence threshold
+  → validation status
+  → scope and schema
+  → optional generic-entity exclusion
+  → deterministic confidence/name ordering
+  → maximum relationship limit
+  → cardinality-aware DBML rendering
+~~~
 
-Cardinality mapping is conservative:
+Reverse-direction relationships are not automatically deduplicated because direction identifies the inferred referencing column.
 
-| ReliFinder | DBML |
-|---|---|
-| <code>Many-to-One</code> | <code>&gt;</code> |
-| <code>One-to-Many</code> | <code>&lt;</code> |
-| <code>One-to-One</code> | <code>-</code> |
-| Unknown / insufficient evidence | No Ref is invented; evidence is retained in comments |
+### Scopes and isolated tables
 
-Current ERD limitations: relationships are single-column, optionality is not inferred completely, and DBML rendering/layout is controlled by the chosen viewer. Oracle datatypes are preserved for documentation rather than converted for migration.
+| Scope | Output | Behavior |
+|---|---|---|
+| <code>full</code> | <code>erd/full.dbml</code> | All qualifying relationships |
+| <code>schema</code> | <code>erd/schemas/SCHEMA.dbml</code> | One file per selected schema; referenced external tables are marked |
+| <code>cross-schema</code> | <code>erd/cross-schema.dbml</code> | Only relationships crossing schema boundaries |
+
+By default, only tables needed by qualifying relationships are emitted. Use <code>--erd-include-isolated-tables</code> to include unrelated tables in full and schema exports. Cross-schema scope intentionally ignores this option because unrelated tables would obscure its purpose.
+
+Use <code>--erd-schema SCHEMA_A</code> repeatedly to focus an export, <code>--erd-max-relationships N</code> for a deterministic cap, and <code>--erd-exclude-generic</code> to hide recognized lookup entities from visualization only.
+
+### Offline export
+
+New runs prefer <code>analysis-results.json</code>, so a later offline export can lower the ERD threshold below the original CSV report threshold without reconnecting to Oracle:
+
+~~~bash
+oracle-relationship-discovery export-erd \
+  --input output/RUN \
+  --format dbml \
+  --min-confidence 60 \
+  --scope cross-schema
+~~~
+
+The input may be a run directory, <code>analysis-results.json</code>, or a legacy <code>relationships.csv</code>. If a CSV is supplied and a sibling <code>analysis-results.json</code> exists, the richer artifact wins automatically. Older CSV-only runs remain supported, but relationships already removed by the original report threshold cannot be recovered; ReliFinder logs this limitation. Without <code>schema-metadata.json</code>, legacy export produces minimal table definitions from CSV endpoints.
+
+### Unknown cardinality and export statistics
+
+ReliFinder never invents cardinality to make a line appear. DBML supports Many-to-One (<code>&gt;</code>), One-to-Many (<code>&lt;</code>), and One-to-One (<code>-</code>) but has no neutral unknown operator. A qualifying unknown-cardinality relationship is preserved as evidence comments while its <code>Ref</code> is omitted.
+
+DBML headers, logs, and the self-contained HTML report distinguish eligible relationships, rendered references, validation omissions, unknown-cardinality omissions, limit omissions, included tables, and isolated tables. Therefore a user can see when the number of rendered lines differs from the number of qualifying inferences.
+
+Open generated files in dbdiagram.io or another DBML-compatible viewer. Viewer layout is external to ReliFinder.
+
+Current limitations: inferred relationships are single-column, optionality is not fully inferred, older CSV-only runs cannot restore discarded relationships, and complex Oracle datatypes are preserved as quoted DBML type names when necessary rather than translated to another SQL dialect.
 ## Configuration reference
 
 <details>
@@ -393,8 +445,14 @@ src/oracle_relationship_discovery/
 │   ├── data_sampler.py
 │   └── metadata_repository.py
 ├── output/
+│   ├── analysis_results.py
 │   ├── csv_report.py
-│   └── html_report.py
+│   ├── dbml_exporter.py
+│   ├── erd_builder.py
+│   ├── erd_models.py
+│   ├── erd_service.py
+│   ├── html_report.py
+│   └── schema_metadata.py
 ├── cli.py
 ├── config.py
 └── models.py

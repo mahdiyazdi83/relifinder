@@ -196,6 +196,8 @@ def test_schema_metadata_round_trip_contains_no_sample_values(tmp_path: Path):
                 nullable=False,
                 position=1,
                 pk_constraints=("PK_CUSTOMERS",),
+                num_distinct=10,
+                num_nulls=0,
             )
         ],
     )
@@ -209,6 +211,9 @@ def test_schema_metadata_round_trip_contains_no_sample_values(tmp_path: Path):
     assert "sample" not in raw.lower().replace("sampled values", "")
     assert restored[0].columns[0].pk_constraints == ("PK_CUSTOMERS",)
     assert restored[0].columns[0].precision == 12
+    assert restored[0].columns[0].num_distinct == 10
+    assert restored[0].columns[0].num_nulls == 0
+    assert restored[0].last_analyzed == table.last_analyzed
 
 
 def test_offline_csv_adapter_uses_metadata_when_available(tmp_path: Path):

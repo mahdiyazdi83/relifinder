@@ -37,19 +37,34 @@ def write_html(
                 "format": result.format.upper(),
                 "scope": result.scope,
                 "minConfidence": result.min_confidence,
-                "relationships": result.relationship_count,
-                "omitted": result.omitted_by_limit,
+                "validationStatuses": list(result.validation_statuses),
+                "inputRelationships": result.input_relationships,
+                "confidenceQualified": result.confidence_qualified_relationships,
+                "validationQualified": result.validation_qualified_relationships,
+                "eligibleRelationships": result.eligible_relationships,
+                "renderedRelationships": result.rendered_relationships,
+                "unknownOmitted": result.unknown_cardinality_relationships,
+                "validationOmitted": result.omitted_by_validation_filter,
+                "limitOmitted": result.omitted_by_limit,
+                "includedTables": result.included_tables,
+                "isolatedTables": result.isolated_tables_included,
             }
         )
         label = html_lib.escape(export_path)
         href = html_lib.escape(export_path, quote=True)
+        statuses = ", ".join(result.validation_statuses) or "none"
         detail = (
             f"{result.format.upper()} · {result.scope} · "
-            f"{result.relationship_count} relationships · "
-            f"confidence ≥ {result.min_confidence:g}"
+            f"confidence ≥ {result.min_confidence:g} · "
+            f"validation: {statuses} · "
+            f"eligible {result.eligible_relationships} · "
+            f"rendered refs {result.rendered_relationships} · "
+            f"unknown omitted {result.unknown_cardinality_relationships} · "
+            f"validation omitted {result.omitted_by_validation_filter} · "
+            f"limit omitted {result.omitted_by_limit} · "
+            f"tables {result.included_tables} · "
+            f"isolated {result.isolated_tables_included}"
         )
-        if result.omitted_by_limit:
-            detail += f" · {result.omitted_by_limit} omitted"
         export_cards.append(
             f'<a class="erd-file" href="{href}" download><b>{label}</b>'
             f"<small>{html_lib.escape(detail)}</small></a>"

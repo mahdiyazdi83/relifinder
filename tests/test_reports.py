@@ -46,7 +46,20 @@ def test_reports_are_self_contained_and_aggregate_only(tmp_path: Path):
         stats,
         "sampled",
         generated_at,
-        [ErdExportResult(tmp_path / "erd" / "full.dbml", "dbml", "full", 80, 1)],
+        [
+            ErdExportResult(
+                tmp_path / "erd" / "full.dbml",
+                "dbml",
+                "full",
+                80,
+                eligible_relationships=1,
+                input_relationships=2,
+                confidence_qualified_relationships=1,
+                validation_qualified_relationships=1,
+                rendered_relationships=1,
+                included_tables=2,
+            )
+        ],
     )
 
     with csv_path.open(encoding="utf-8-sig") as handle:
@@ -62,4 +75,7 @@ def test_reports_are_self_contained_and_aggregate_only(tmp_path: Path):
     assert 'data-theme="light"' in html
     assert "ERD exports" in html
     assert 'href="erd/full.dbml"' in html
-    assert "1 relationships" in html
+    assert "eligible 1" in html
+    assert "rendered refs 1" in html
+    assert "unknown omitted 0" in html
+    assert "tables 2" in html

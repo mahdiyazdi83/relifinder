@@ -46,3 +46,8 @@ sqlnet.ora
 /erd/
 *.dbml
 *.log
+
+# Local agent and task context
+/.agent
+/.agent/
+/analysis-results*.json

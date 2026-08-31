@@ -10,6 +10,8 @@ from typing import Any
 
 import yaml
 
+from oracle_relationship_discovery.models import ValidationStatus
+
 DEFAULT_WEIGHTS = {
     "name": 35,
     "datatype": 15,
@@ -77,6 +79,8 @@ class ErdConfig:
     schemas: tuple[str, ...] = ()
     max_relationships: int | None = None
     exclude_generic: bool = False
+    include_isolated_tables: bool = False
+    validation_statuses: tuple[str, ...] = ("VALIDATED", "NOT_RUN", "SKIPPED")
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,6 +147,22 @@ def load_config(path: Path) -> AppConfig:
         if raw_max_relationships is not None
         else None
     )
+    raw_validation_statuses = erd_raw.get(
+        "validation_statuses", ("VALIDATED", "NOT_RUN", "SKIPPED")
+    )
+    if isinstance(raw_validation_statuses, str) or not isinstance(
+        raw_validation_statuses, (list, tuple)
+    ):
+        raise ValueError("erd.validation_statuses must be a list")  # noqa: TRY004
+    erd_validation_statuses = tuple(
+        dict.fromkeys(str(value).upper() for value in raw_validation_statuses)
+    )
+    valid_statuses = {status.value for status in ValidationStatus}
+    unknown_statuses = sorted(set(erd_validation_statuses) - valid_statuses)
+    if unknown_statuses:
+        raise ValueError(
+            "erd.validation_statuses contains unknown values: " + ", ".join(unknown_statuses)
+        )
 
     sampling = SamplingConfig(
         enabled=bool(sampling_raw.get("enabled", True)),
@@ -208,5 +228,7 @@ def load_config(path: Path) -> AppConfig:
             ),
             max_relationships=erd_max_relationships,
             exclude_generic=bool(erd_raw.get("exclude_generic", False)),
+            include_isolated_tables=bool(erd_raw.get("include_isolated_tables", False)),
+            validation_statuses=erd_validation_statuses,
         ),
     )

@@ -47,3 +47,5 @@ erd:
   schemas: []
   max_relationships: null
   exclude_generic: false
+  include_isolated_tables: false
+  validation_statuses: [VALIDATED, NOT_RUN, SKIPPED]

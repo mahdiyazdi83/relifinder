@@ -61,6 +61,11 @@ def test_analyze_parser_accepts_erd_overrides():
             "APP",
             "--erd-max-relationships",
             "100",
+            "--erd-validation-status",
+            "VALIDATED",
+            "--erd-validation-status",
+            "SKIPPED",
+            "--erd-include-isolated-tables",
             "--erd-exclude-generic",
         ]
     )
@@ -69,6 +74,8 @@ def test_analyze_parser_accepts_erd_overrides():
     assert args.erd_min_confidence == 85
     assert args.erd_scope == "schema"
     assert args.erd_schema == ["APP"]
+    assert args.erd_validation_status == ["VALIDATED", "SKIPPED"]
+    assert args.erd_include_isolated_tables is True
 
 
 def test_config_loads_erd_defaults_and_options(tmp_path: Path):
@@ -89,6 +96,8 @@ erd:
   schemas: [app]
   max_relationships: 25
   exclude_generic: true
+  include_isolated_tables: true
+  validation_statuses: [VALIDATED, NOT_RUN]
 """.strip(),
         encoding="utf-8",
     )
@@ -101,6 +110,8 @@ erd:
     assert config.erd.schemas == ("APP",)
     assert config.erd.max_relationships == 25
     assert config.erd.exclude_generic is True
+    assert config.erd.include_isolated_tables is True
+    assert config.erd.validation_statuses == ("VALIDATED", "NOT_RUN")
 
 
 def test_offline_export_command_needs_no_config_or_oracle(tmp_path: Path, monkeypatch):
@@ -126,3 +137,80 @@ def test_offline_export_command_needs_no_config_or_oracle(tmp_path: Path, monkey
     assert "Ref: APP.REQUEST.PARTY_ID > CORE.PARTY.ID" in text
     assert "Minimum confidence: 90" in text
     assert (tmp_path / "logs" / "oracle-relationship-discovery.log").is_file()
+
+
+def test_offline_cli_rejects_invalid_numeric_options(tmp_path: Path, monkeypatch):
+    csv_path = tmp_path / "relationships.csv"
+    _write_relationships(csv_path)
+    monkeypatch.chdir(tmp_path)
+
+    assert (
+        main(
+            [
+                "export-erd",
+                "--input",
+                str(csv_path),
+                "--min-confidence",
+                "-1",
+            ]
+        )
+        == 2
+    )
+    assert (
+        main(
+            [
+                "export-erd",
+                "--input",
+                str(csv_path),
+                "--max-relationships",
+                "0",
+            ]
+        )
+        == 2
+    )
+
+
+def test_offline_cli_rejects_missing_and_corrupt_inputs(tmp_path: Path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    assert main(["export-erd", "--input", str(tmp_path / "missing")]) == 2
+
+    artifact = tmp_path / "analysis-results.json"
+    artifact.write_text("{broken", encoding="utf-8")
+    assert main(["export-erd", "--input", str(artifact)]) == 2
+
+
+def test_parser_rejects_unknown_validation_status():
+    import pytest
+
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(
+            [
+                "export-erd",
+                "--input",
+                "relationships.csv",
+                "--validation-status",
+                "BROKEN",
+            ]
+        )
+
+
+def test_config_rejects_non_list_validation_statuses(tmp_path: Path):
+    import pytest
+
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        """
+database:
+  host: localhost
+  service_name: TEST
+  username: reader
+  password_env: TEST_PASSWORD
+schemas: [APP]
+erd:
+  validation_statuses: VALIDATED
+""".strip(),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="validation_statuses must be a list"):
+        load_config(config_path)

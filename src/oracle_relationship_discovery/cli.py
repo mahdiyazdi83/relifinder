@@ -11,8 +11,13 @@ from pathlib import Path
 
 from oracle_relationship_discovery.config import AnalysisConfig, AppConfig, load_config
 from oracle_relationship_discovery.models import AnalysisStats, ValidationStatus
+from oracle_relationship_discovery.output.analysis_results import write_analysis_results
 from oracle_relationship_discovery.output.csv_report import write_csv
-from oracle_relationship_discovery.output.erd_builder import build_erd_model, load_erd_model
+from oracle_relationship_discovery.output.erd_builder import (
+    build_erd_model,
+    load_erd_model,
+    resolve_offline_source,
+)
 from oracle_relationship_discovery.output.erd_models import ErdExportOptions
 from oracle_relationship_discovery.output.erd_service import export_erd
 from oracle_relationship_discovery.output.html_report import write_html
@@ -51,6 +56,20 @@ def _add_erd_arguments(parser: argparse.ArgumentParser, *, analyze: bool) -> Non
         help="Keep only the highest-confidence relationships",
     )
     parser.add_argument(
+        "--erd-validation-status" if analyze else "--validation-status",
+        action="append",
+        choices=tuple(status.value for status in ValidationStatus),
+        default=None,
+        metavar="STATUS",
+        help="Allowed validation status; repeat to allow multiple statuses",
+    )
+    parser.add_argument(
+        "--erd-include-isolated-tables" if analyze else "--include-isolated-tables",
+        action="store_true",
+        default=None,
+        help="Include tables with no qualifying relationship (not for cross-schema scope)",
+    )
+    parser.add_argument(
         "--erd-exclude-generic" if analyze else "--exclude-generic",
         action="store_true",
         help="Exclude generic entities configured for scoring",
@@ -82,13 +101,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     offline = subparsers.add_parser(
         "export-erd",
-        help="Export DBML from an existing relationships.csv without connecting to Oracle",
+        help="Export DBML from an existing ReliFinder run without connecting to Oracle",
     )
-    offline.add_argument("--input", type=Path, required=True, help="Existing relationships.csv")
+    offline.add_argument(
+        "--input",
+        type=Path,
+        required=True,
+        help="Run directory, analysis-results.json, or legacy relationships.csv",
+    )
     offline.add_argument(
         "--metadata",
         type=Path,
-        help="Safe schema-metadata.json (defaults to the CSV directory)",
+        help="Safe schema-metadata.json (defaults to the input artifact directory)",
     )
     offline.add_argument("--output-dir", type=Path, help="ERD destination directory")
     offline.add_argument("--verbose", action="store_true", help="Enable DEBUG logging")
@@ -130,6 +154,10 @@ def _erd_options(args: argparse.Namespace, config: AppConfig | None = None) -> E
     minimum = getattr(args, f"{prefix}min_confidence")
     maximum = getattr(args, f"{prefix}max_relationships")
     schemas = getattr(args, f"{prefix}schema") or (configured.schemas if configured else ())
+    validation_statuses = getattr(args, f"{prefix}validation_status") or (
+        configured.validation_statuses if configured else ("VALIDATED", "NOT_RUN", "SKIPPED")
+    )
+    include_isolated = getattr(args, f"{prefix}include_isolated_tables")
     if maximum is not None and maximum <= 0:
         flag = "--erd-max-relationships" if config else "--max-relationships"
         raise ValueError(f"{flag} must be greater than zero")
@@ -151,6 +179,10 @@ def _erd_options(args: argparse.Namespace, config: AppConfig | None = None) -> E
         generic_entities=config.analysis.generic_entities
         if config
         else AnalysisConfig().generic_entities,
+        include_isolated_tables=include_isolated
+        if include_isolated is not None
+        else (configured.include_isolated_tables if configured else False),
+        validation_statuses=tuple(dict.fromkeys(validation_statuses)),
     )
 
 
@@ -240,11 +272,19 @@ def run_analyze(args: argparse.Namespace) -> int:
         candidates_skipped_by_limit=skipped_by_limit,
     )
 
+    erd_model = build_erd_model(tables, candidates)
+    write_analysis_results(
+        run_directory / "analysis-results.json",
+        erd_model.relationships,
+        mode,
+        generated_at,
+    )
+
     erd_results = []
     if erd_enabled:
         LOGGER.info("Exporting %s ERD with scope=%s", erd_options.format, erd_options.scope)
         erd_results = export_erd(
-            build_erd_model(tables, candidates),
+            erd_model,
             run_directory / "erd",
             erd_options,
         )
@@ -265,35 +305,49 @@ def run_analyze(args: argparse.Namespace) -> int:
 
 
 def run_export_erd(args: argparse.Namespace) -> int:
-    input_path = args.input.resolve()
-    if not input_path.is_file():
-        raise ValueError(f"Input CSV does not exist: {input_path}")
+    requested_input = args.input.resolve()
+    source = resolve_offline_source(requested_input)
+    run_directory = source.path.parent
     metadata_path = (
-        args.metadata.resolve() if args.metadata else input_path.with_name("schema-metadata.json")
+        args.metadata.resolve() if args.metadata else run_directory / "schema-metadata.json"
     )
     if args.metadata and not metadata_path.is_file():
         raise ValueError(f"Metadata file does not exist: {metadata_path}")
     if not metadata_path.is_file():
         metadata_path = None
 
-    destination = args.output_dir.resolve() if args.output_dir else input_path.parent / "erd"
-    configure_logging(args.verbose, Path("logs/oracle-relationship-discovery.log").resolve())
-    LOGGER.info("Offline ERD export from %s", input_path)
+    destination = args.output_dir.resolve() if args.output_dir else run_directory / "erd"
+    configure_logging(
+        args.verbose,
+        Path("logs/oracle-relationship-discovery.log").resolve(),
+    )
+    LOGGER.info("Offline ERD export source: %s", source.path)
+    if source.legacy_csv:
+        LOGGER.warning(
+            "Using legacy relationships.csv fallback. Relationships below the "
+            "original report threshold are unavailable; lowering the ERD "
+            "threshold may not restore them."
+        )
     if metadata_path:
         LOGGER.info("Using safe metadata artifact %s", metadata_path)
     else:
         LOGGER.warning("schema-metadata.json not found; exporting minimal table definitions")
+
     results = export_erd(
-        load_erd_model(input_path, metadata_path),
+        load_erd_model(source.path, metadata_path),
         destination,
         _erd_options(args),
     )
     for result in results:
         LOGGER.info(
-            "ERD written: %s (%d relationships, %d omitted)",
+            "ERD written: %s (eligible=%d, rendered=%d, unknown_omitted=%d, "
+            "limit_omitted=%d, validation_omitted=%d)",
             result.path,
-            result.relationship_count,
+            result.eligible_relationships,
+            result.rendered_relationships,
+            result.unknown_cardinality_relationships,
             result.omitted_by_limit,
+            result.omitted_by_validation_filter,
         )
     return 0
 
