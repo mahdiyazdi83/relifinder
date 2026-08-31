@@ -42,4 +42,7 @@ sqlnet.ora
 /logs/
 /relationships*.csv
 /relationship-report*.html
+/schema-metadata*.json
+/erd/
+*.dbml
 *.log

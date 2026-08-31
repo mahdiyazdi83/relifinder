@@ -9,23 +9,65 @@ from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
-from oracle_relationship_discovery.config import load_config
-from oracle_relationship_discovery.db.connection import connect, connection_pool
-from oracle_relationship_discovery.db.data_sampler import OracleDataSampler
-from oracle_relationship_discovery.db.metadata_repository import MetadataRepository
+from oracle_relationship_discovery.config import AnalysisConfig, AppConfig, load_config
 from oracle_relationship_discovery.models import AnalysisStats, ValidationStatus
 from oracle_relationship_discovery.output.csv_report import write_csv
+from oracle_relationship_discovery.output.erd_builder import build_erd_model, load_erd_model
+from oracle_relationship_discovery.output.erd_models import ErdExportOptions
+from oracle_relationship_discovery.output.erd_service import export_erd
 from oracle_relationship_discovery.output.html_report import write_html
+from oracle_relationship_discovery.output.schema_metadata import write_schema_metadata
 
 LOGGER = logging.getLogger(__name__)
+ERD_SCOPES = ("full", "schema", "cross-schema")
+
+
+def _add_erd_arguments(parser: argparse.ArgumentParser, *, analyze: bool) -> None:
+    if analyze:
+        parser.add_argument("--erd", action="store_true", help="Export an inferred DBML ERD")
+    parser.add_argument("--erd-format" if analyze else "--format", choices=("dbml",), default=None)
+    parser.add_argument(
+        "--erd-min-confidence" if analyze else "--min-confidence",
+        type=float,
+        default=None if analyze else 80,
+        help="Minimum confidence included in ERD exports",
+    )
+    parser.add_argument(
+        "--erd-scope" if analyze else "--scope",
+        choices=ERD_SCOPES,
+        default=None if analyze else "full",
+    )
+    parser.add_argument(
+        "--erd-schema" if analyze else "--schema",
+        action="append",
+        default=None,
+        metavar="SCHEMA",
+        help="Limit ERD export to a schema; repeat for multiple schemas",
+    )
+    parser.add_argument(
+        "--erd-max-relationships" if analyze else "--max-relationships",
+        type=int,
+        default=None,
+        help="Keep only the highest-confidence relationships",
+    )
+    parser.add_argument(
+        "--erd-exclude-generic" if analyze else "--exclude-generic",
+        action="store_true",
+        help="Exclude generic entities configured for scoring",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Discover probable logical Oracle relationships safely"
     )
-    parser.add_argument("--config", type=Path, required=True, help="YAML configuration path")
+    parser.add_argument(
+        "--config",
+        type=Path,
+        help="YAML configuration path (required for analyze)",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
+
     analyze = subparsers.add_parser("analyze", help="Run relationship analysis")
     analyze.add_argument(
         "--metadata-only", action="store_true", help="Do not query user table data"
@@ -36,6 +78,21 @@ def build_parser() -> argparse.ArgumentParser:
     analyze.add_argument("--min-confidence", type=float, help="Minimum score written to reports")
     analyze.add_argument("--output-dir", type=Path, help="Override report directory")
     analyze.add_argument("--verbose", action="store_true", help="Enable DEBUG logging")
+    _add_erd_arguments(analyze, analyze=True)
+
+    offline = subparsers.add_parser(
+        "export-erd",
+        help="Export DBML from an existing relationships.csv without connecting to Oracle",
+    )
+    offline.add_argument("--input", type=Path, required=True, help="Existing relationships.csv")
+    offline.add_argument(
+        "--metadata",
+        type=Path,
+        help="Safe schema-metadata.json (defaults to the CSV directory)",
+    )
+    offline.add_argument("--output-dir", type=Path, help="ERD destination directory")
+    offline.add_argument("--verbose", action="store_true", help="Enable DEBUG logging")
+    _add_erd_arguments(offline, analyze=False)
     return parser
 
 
@@ -61,7 +118,45 @@ def configure_logging(verbose: bool, log_file: Path) -> None:
     )
 
 
+def _validate_percentage(name: str, value: float) -> float:
+    if not 0 <= value <= 100:
+        raise ValueError(f"{name} must be between 0 and 100")
+    return value
+
+
+def _erd_options(args: argparse.Namespace, config: AppConfig | None = None) -> ErdExportOptions:
+    configured = config.erd if config else None
+    prefix = "erd_" if config else ""
+    minimum = getattr(args, f"{prefix}min_confidence")
+    maximum = getattr(args, f"{prefix}max_relationships")
+    schemas = getattr(args, f"{prefix}schema") or (configured.schemas if configured else ())
+    if maximum is not None and maximum <= 0:
+        flag = "--erd-max-relationships" if config else "--max-relationships"
+        raise ValueError(f"{flag} must be greater than zero")
+    minimum = minimum if minimum is not None else configured.min_confidence
+    _validate_percentage(
+        "--erd-min-confidence" if config else "--min-confidence",
+        minimum,
+    )
+    return ErdExportOptions(
+        format=getattr(args, f"{prefix}format") or (configured.format if configured else "dbml"),
+        scope=getattr(args, f"{prefix}scope") or (configured.scope if configured else "full"),
+        min_confidence=minimum,
+        schemas=tuple(dict.fromkeys(str(value).upper() for value in schemas)),
+        max_relationships=maximum
+        if maximum is not None
+        else (configured.max_relationships if configured else None),
+        exclude_generic=bool(getattr(args, f"{prefix}exclude_generic"))
+        or (configured.exclude_generic if configured else False),
+        generic_entities=config.analysis.generic_entities
+        if config
+        else AnalysisConfig().generic_entities,
+    )
+
+
 def run_analyze(args: argparse.Namespace) -> int:
+    if args.config is None:
+        raise ValueError("--config is required for analyze")
     config = load_config(args.config)
     if args.metadata_only or args.disable_sampling:
         config = replace(config, sampling=replace(config.sampling, enabled=False))
@@ -72,8 +167,10 @@ def run_analyze(args: argparse.Namespace) -> int:
         if args.min_confidence is not None
         else config.analysis.min_report_confidence
     )
-    if not 0 <= min_confidence <= 100:
-        raise ValueError("--min-confidence must be between 0 and 100")
+    _validate_percentage("--min-confidence", min_confidence)
+    erd_options = _erd_options(args, config)
+    erd_enabled = args.erd or config.erd.enabled
+
     started_at = datetime.now().astimezone()
     mode = "sampled" if config.sampling.enabled else "metadata-only"
     run_directory = create_run_directory(config.output.directory, mode, started_at)
@@ -89,10 +186,15 @@ def run_analyze(args: argparse.Namespace) -> int:
     LOGGER.info("Run artifacts: %s", run_directory)
     LOGGER.info("Comprehensive log: %s", comprehensive_log)
 
+    from oracle_relationship_discovery.db.connection import connect, connection_pool
+    from oracle_relationship_discovery.db.data_sampler import OracleDataSampler
+    from oracle_relationship_discovery.db.metadata_repository import MetadataRepository
+
     LOGGER.info("[1/5] Reading metadata for %d configured schemas", len(config.schemas))
     with connect(config.database, config.performance.query_timeout_seconds) as connection:
         tables = MetadataRepository(connection).load(config.schemas)
     columns = sum(len(table.columns) for table in tables)
+    write_schema_metadata(run_directory / "schema-metadata.json", tables, generated_at)
 
     LOGGER.info(
         "[2/5] Building metadata candidates from %d tables and %d columns", len(tables), columns
@@ -123,10 +225,9 @@ def run_analyze(args: argparse.Namespace) -> int:
             factory = lambda: OracleDataSampler(acquire_connection, config.sampling)
             candidates, skipped_by_limit = validate_candidates(candidates, factory, config)
     else:
-        # The factory is deliberately unused by metadata-only validation.
         candidates, skipped_by_limit = validate_candidates(candidates, lambda: None, config)
-    report_candidates = [candidate for candidate in candidates if candidate.score >= min_confidence]
 
+    report_candidates = [candidate for candidate in candidates if candidate.score >= min_confidence]
     validated = sum(
         candidate.evidence.status == ValidationStatus.VALIDATED for candidate in candidates
     )
@@ -138,6 +239,16 @@ def run_analyze(args: argparse.Namespace) -> int:
         candidates_validated=validated,
         candidates_skipped_by_limit=skipped_by_limit,
     )
+
+    erd_results = []
+    if erd_enabled:
+        LOGGER.info("Exporting %s ERD with scope=%s", erd_options.format, erd_options.scope)
+        erd_results = export_erd(
+            build_erd_model(tables, candidates),
+            run_directory / "erd",
+            erd_options,
+        )
+
     LOGGER.info("[5/5] Writing %d relationships to %s", len(report_candidates), run_directory)
     write_csv(run_directory / "relationships.csv", report_candidates, mode, generated_at)
     write_html(
@@ -146,9 +257,44 @@ def run_analyze(args: argparse.Namespace) -> int:
         stats,
         analysis_mode=mode,
         generated_at=generated_at,
+        erd_exports=erd_results,
     )
     LOGGER.info("RUN COMPLETE: %s", run_directory.name)
     LOGGER.info("Analysis complete. Reports contain aggregate evidence only.")
+    return 0
+
+
+def run_export_erd(args: argparse.Namespace) -> int:
+    input_path = args.input.resolve()
+    if not input_path.is_file():
+        raise ValueError(f"Input CSV does not exist: {input_path}")
+    metadata_path = (
+        args.metadata.resolve() if args.metadata else input_path.with_name("schema-metadata.json")
+    )
+    if args.metadata and not metadata_path.is_file():
+        raise ValueError(f"Metadata file does not exist: {metadata_path}")
+    if not metadata_path.is_file():
+        metadata_path = None
+
+    destination = args.output_dir.resolve() if args.output_dir else input_path.parent / "erd"
+    configure_logging(args.verbose, Path("logs/oracle-relationship-discovery.log").resolve())
+    LOGGER.info("Offline ERD export from %s", input_path)
+    if metadata_path:
+        LOGGER.info("Using safe metadata artifact %s", metadata_path)
+    else:
+        LOGGER.warning("schema-metadata.json not found; exporting minimal table definitions")
+    results = export_erd(
+        load_erd_model(input_path, metadata_path),
+        destination,
+        _erd_options(args),
+    )
+    for result in results:
+        LOGGER.info(
+            "ERD written: %s (%d relationships, %d omitted)",
+            result.path,
+            result.relationship_count,
+            result.omitted_by_limit,
+        )
     return 0
 
 
@@ -158,6 +304,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "analyze":
             return run_analyze(args)
+        if args.command == "export-erd":
+            return run_export_erd(args)
     except (ValueError, OSError) as exc:
         message = f"error: {exc}"
         if logging.getLogger().handlers:
@@ -166,7 +314,7 @@ def main(argv: list[str] | None = None) -> int:
             print(message, file=sys.stderr)
         return 2
     except Exception as exc:  # noqa: BLE001 - present driver failures without a noisy traceback.
-        message = f"database analysis failed ({type(exc).__name__}): {exc}"
+        message = f"operation failed ({type(exc).__name__}): {exc}"
         if logging.getLogger().handlers:
             LOGGER.error(message)
         else:

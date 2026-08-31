@@ -10,6 +10,7 @@ from oracle_relationship_discovery.models import (
     ValidationStatus,
 )
 from oracle_relationship_discovery.output.csv_report import write_csv
+from oracle_relationship_discovery.output.erd_models import ErdExportResult
 from oracle_relationship_discovery.output.html_report import write_html
 
 
@@ -39,7 +40,14 @@ def test_reports_are_self_contained_and_aggregate_only(tmp_path: Path):
 
     generated_at = "2026-08-29T10:20:30.123456+03:30"
     write_csv(csv_path, [candidate], "sampled", generated_at)
-    write_html(html_path, [candidate], stats, "sampled", generated_at)
+    write_html(
+        html_path,
+        [candidate],
+        stats,
+        "sampled",
+        generated_at,
+        [ErdExportResult(tmp_path / "erd" / "full.dbml", "dbml", "full", 80, 1)],
+    )
 
     with csv_path.open(encoding="utf-8-sig") as handle:
         row = next(csv.DictReader(handle))
@@ -52,3 +60,6 @@ def test_reports_are_self_contained_and_aggregate_only(tmp_path: Path):
     assert "Relationship Discovery" in html
     assert 'id="theme"' in html
     assert 'data-theme="light"' in html
+    assert "ERD exports" in html
+    assert 'href="erd/full.dbml"' in html
+    assert "1 relationships" in html

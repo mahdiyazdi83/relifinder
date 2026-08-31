@@ -69,6 +69,17 @@ class OutputConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class ErdConfig:
+    enabled: bool = False
+    format: str = "dbml"
+    min_confidence: float = 80
+    scope: str = "full"
+    schemas: tuple[str, ...] = ()
+    max_relationships: int | None = None
+    exclude_generic: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class AppConfig:
     database: DatabaseConfig
     schemas: tuple[str, ...]
@@ -76,6 +87,7 @@ class AppConfig:
     sampling: SamplingConfig = SamplingConfig()
     performance: PerformanceConfig = PerformanceConfig()
     output: OutputConfig = OutputConfig()
+    erd: ErdConfig = ErdConfig()
 
 
 def _expand_env(value: Any) -> Any:
@@ -114,6 +126,23 @@ def load_config(path: Path) -> AppConfig:
     sampling_raw = raw.get("sampling", {})
     performance_raw = raw.get("performance", {})
     output_raw = raw.get("output", {})
+    erd_raw = raw.get("erd", {})
+
+    erd_format = str(erd_raw.get("format", "dbml")).lower()
+    if erd_format != "dbml":
+        raise ValueError("erd.format must be 'dbml'")
+    erd_scope = str(erd_raw.get("scope", "full")).lower()
+    if erd_scope not in {"full", "schema", "cross-schema"}:
+        raise ValueError("erd.scope must be 'full', 'schema', or 'cross-schema'")
+    erd_min_confidence = float(erd_raw.get("min_confidence", 80))
+    if not 0 <= erd_min_confidence <= 100:
+        raise ValueError("erd.min_confidence must be between 0 and 100")
+    raw_max_relationships = erd_raw.get("max_relationships")
+    erd_max_relationships = (
+        _positive("erd.max_relationships", int(raw_max_relationships))
+        if raw_max_relationships is not None
+        else None
+    )
 
     sampling = SamplingConfig(
         enabled=bool(sampling_raw.get("enabled", True)),
@@ -168,5 +197,16 @@ def load_config(path: Path) -> AppConfig:
         output=OutputConfig(
             directory=Path(output_raw.get("directory", "output")),
             log_file=Path(log_file) if log_file else None,
+        ),
+        erd=ErdConfig(
+            enabled=bool(erd_raw.get("enabled", False)),
+            format=erd_format,
+            min_confidence=erd_min_confidence,
+            scope=erd_scope,
+            schemas=tuple(
+                dict.fromkeys(str(value).upper() for value in erd_raw.get("schemas", []) if value)
+            ),
+            max_relationships=erd_max_relationships,
+            exclude_generic=bool(erd_raw.get("exclude_generic", False)),
         ),
     )

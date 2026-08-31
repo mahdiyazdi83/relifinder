@@ -37,3 +37,13 @@ output:
   directory: output
   # One append-only comprehensive log shared by every run.
   log_file: logs/oracle-relationship-discovery.log
+
+# Optional visualization export. These are inferred logical relationships, not Oracle FKs.
+erd:
+  enabled: false
+  format: dbml
+  min_confidence: 80
+  scope: full
+  schemas: []
+  max_relationships: null
+  exclude_generic: false
