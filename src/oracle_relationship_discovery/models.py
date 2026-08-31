@@ -74,6 +74,14 @@ class TableMetadata:
 
 
 @dataclass(frozen=True, slots=True)
+class SchemaSummary:
+    name: str
+    table_count: int
+    column_count: int
+    oracle_maintained: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class ScoreBreakdown:
     name: float = 0
     datatype: float = 0

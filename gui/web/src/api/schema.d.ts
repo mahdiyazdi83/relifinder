@@ -4,6 +4,57 @@
  */
 
 export interface paths {
+    "/api/connections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Connection */
+        post: operations["create_connection_api_connections_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connections/{connection_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Disconnect */
+        delete: operations["disconnect_api_connections__connection_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connections/{connection_id}/schemas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Schemas */
+        get: operations["list_schemas_api_connections__connection_id__schemas_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -25,6 +76,69 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** ApiErrorDetail */
+        ApiErrorDetail: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+        };
+        /** ApiErrorResponse */
+        ApiErrorResponse: {
+            error: components["schemas"]["ApiErrorDetail"];
+        };
+        /** CapabilityCheck */
+        CapabilityCheck: {
+            /**
+             * Key
+             * @enum {string}
+             */
+            key: "oracle_connection" | "metadata_visibility" | "schema_discovery";
+            /** Label */
+            label: string;
+            /**
+             * Status
+             * @default available
+             * @constant
+             */
+            status: "available";
+        };
+        /** ConnectionCreateRequest */
+        ConnectionCreateRequest: {
+            /** Host */
+            host: string;
+            /**
+             * Password
+             * Format: password
+             */
+            password: string;
+            /**
+             * Port
+             * @default 1521
+             */
+            port: number;
+            /** Replace Connection Id */
+            replace_connection_id?: string | null;
+            /** Service Name */
+            service_name: string;
+            /** Username */
+            username: string;
+        };
+        /** ConnectionResponse */
+        ConnectionResponse: {
+            /** Checks */
+            checks: components["schemas"]["CapabilityCheck"][];
+            /** Connection Id */
+            connection_id: string;
+            /** Expires In Seconds */
+            expires_in_seconds: number;
+            /**
+             * Status
+             * @default connected
+             * @constant
+             */
+            status: "connected";
+        };
         /** HealthResponse */
         HealthResponse: {
             /**
@@ -38,6 +152,24 @@ export interface components {
              */
             status: "ok";
         };
+        /** SchemaListResponse */
+        SchemaListResponse: {
+            /** Connection Id */
+            connection_id: string;
+            /** Schemas */
+            schemas: components["schemas"]["SchemaSummaryResponse"][];
+        };
+        /** SchemaSummaryResponse */
+        SchemaSummaryResponse: {
+            /** Column Count */
+            column_count: number;
+            /** Name */
+            name: string;
+            /** Oracle Maintained */
+            oracle_maintained: boolean;
+            /** Table Count */
+            table_count: number;
+        };
     };
     responses: never;
     parameters: never;
@@ -47,6 +179,171 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    create_connection_api_connections_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectionCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectionResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Gateway Timeout */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    disconnect_api_connections__connection_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    list_schemas_api_connections__connection_id__schemas_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchemaListResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     health_api_health_get: {
         parameters: {
             query?: never;

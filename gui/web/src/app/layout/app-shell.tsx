@@ -48,7 +48,7 @@ export function AppShell() {
               to="/"
             >
               <Database aria-hidden="true" className="size-3.5 shrink-0" strokeWidth={1.8} />
-              <span className="max-sm:sr-only">Workspace</span>
+              <span className="max-sm:sr-only">Connection</span>
             </NavLink>
           </nav>
         </aside>

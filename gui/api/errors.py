@@ -8,6 +8,16 @@ from starlette.exceptions import HTTPException
 from gui.api.schemas.errors import ApiErrorDetail, ApiErrorResponse
 
 LOGGER = logging.getLogger(__name__)
+
+
+class ApiProblem(Exception):
+    def __init__(self, status_code: int, code: str, message: str) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.code = code
+        self.message = message
+
+
 SAFE_HTTP_MESSAGES = {
     400: "The request is invalid.",
     401: "Authentication is required.",
@@ -24,6 +34,10 @@ def _response(status_code: int, code: str, message: str) -> JSONResponse:
 
 
 def install_error_handlers(app: FastAPI) -> None:
+    @app.exception_handler(ApiProblem)
+    async def api_problem(_request: Request, exc: ApiProblem) -> JSONResponse:
+        return _response(exc.status_code, exc.code, exc.message)
+
     @app.exception_handler(HTTPException)
     async def http_error(_request: Request, exc: HTTPException) -> JSONResponse:
         message = SAFE_HTTP_MESSAGES.get(exc.status_code, "The request could not be completed.")

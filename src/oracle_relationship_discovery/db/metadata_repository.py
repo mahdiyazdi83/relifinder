@@ -6,7 +6,15 @@ from collections import defaultdict
 from typing import Any
 
 from oracle_relationship_discovery.db.connection import execute_select
-from oracle_relationship_discovery.models import ColumnMetadata, TableMetadata
+from oracle_relationship_discovery.models import ColumnMetadata, SchemaSummary, TableMetadata
+
+REQUIRED_METADATA_VIEWS = (
+    "ALL_TABLES",
+    "ALL_TAB_COLUMNS",
+    "ALL_CONSTRAINTS",
+    "ALL_CONS_COLUMNS",
+)
+CONSERVATIVE_SYSTEM_SCHEMAS = {"SYS", "SYSTEM"}
 
 
 def _in_clause(prefix: str, values: tuple[str, ...]) -> tuple[str, dict[str, str]]:
@@ -18,6 +26,55 @@ def _in_clause(prefix: str, values: tuple[str, ...]) -> tuple[str, dict[str, str
 class MetadataRepository:
     def __init__(self, connection: Any) -> None:
         self.connection = connection
+
+    def verify_required_access(self) -> None:
+        """Verify that every metadata view used by ReliFinder can be selected."""
+        with self.connection.cursor() as cursor:
+            for view in REQUIRED_METADATA_VIEWS:
+                execute_select(cursor, f"SELECT 1 FROM {view} WHERE 1 = 0").fetchone()
+
+    def discover_schemas(self) -> list[SchemaSummary]:
+        """Return deterministic metadata-only summaries for owners with visible tables."""
+        tables_sql = """
+            SELECT OWNER, COUNT(*)
+            FROM ALL_TABLES
+            GROUP BY OWNER
+            ORDER BY OWNER
+        """
+        columns_sql = """
+            SELECT c.OWNER, COUNT(*)
+            FROM ALL_TAB_COLUMNS c
+            JOIN ALL_TABLES t
+              ON t.OWNER = c.OWNER AND t.TABLE_NAME = c.TABLE_NAME
+            GROUP BY c.OWNER
+            ORDER BY c.OWNER
+        """
+        maintained_sql = """
+            SELECT USERNAME
+            FROM ALL_USERS
+            WHERE ORACLE_MAINTAINED = 'Y'
+            ORDER BY USERNAME
+        """
+        with self.connection.cursor() as cursor:
+            table_rows = execute_select(cursor, tables_sql).fetchall()
+            column_rows = execute_select(cursor, columns_sql).fetchall()
+            try:
+                maintained_rows = execute_select(cursor, maintained_sql).fetchall()
+            except Exception:  # noqa: BLE001 - optional column is absent before Oracle 12c.
+                maintained_rows = tuple((name,) for name in CONSERVATIVE_SYSTEM_SCHEMAS)
+
+        columns_by_owner = {str(owner): int(count) for owner, count in column_rows}
+        maintained = {str(row[0]) for row in maintained_rows}
+        summaries = {
+            str(owner): SchemaSummary(
+                name=str(owner),
+                table_count=int(table_count),
+                column_count=columns_by_owner.get(str(owner), 0),
+                oracle_maintained=str(owner) in maintained,
+            )
+            for owner, table_count in table_rows
+        }
+        return [summaries[name] for name in sorted(summaries)]
 
     def load(self, schemas: tuple[str, ...]) -> list[TableMetadata]:
         placeholders, binds = _in_clause("schema", schemas)

@@ -281,35 +281,40 @@ The self-contained report works directly from disk and includes:
 
 ReliFinder discovers probable logical relationships; the ERD only visualizes those inferences. It never converts them into Oracle Foreign Key constraints. DBML is used because it is portable, reviewable text with native schema-qualified tables.
 
-### GUI foundation (Phase 1)
+### GUI connection and schema discovery (Phase 2)
 
-The GUI is an **early local-first foundation**, not a complete database workflow. Phase 1 implements the application shell and API boundary while keeping the existing Python inference core authoritative.
+The GUI is a **local-first developer workbench**. Phase 2 adds secure Oracle connection verification and metadata-only schema selection while keeping the existing Python inference core authoritative.
 
 **Implemented:**
 
-- restrained technical workbench shell with dark and light themes;
-- centralized React Router configuration and a Not Found route;
-- TanStack Query health check against `GET /api/health`;
-- typed API contracts generated from FastAPI OpenAPI;
-- sanitized API error contract and a relative `/api` client;
-- Vitest/Testing Library tests and one Playwright shell smoke test;
-- static production output in `gui/web/dist/`.
+- connection form for host, port, service name, username, and password;
+- request-scoped Oracle authentication and trivial `SELECT 1 FROM DUAL` verification;
+- required access checks for `ALL_TABLES`, `ALL_TAB_COLUMNS`, `ALL_CONSTRAINTS`, and `ALL_CONS_COLUMNS`;
+- runtime session IDs with a 15-minute idle timeout, a 16-session bound, replacement, and disconnect;
+- deterministic schema summaries from Oracle metadata with table and column counts;
+- search, individual selection, select-visible, clear, selected totals, and optional system schemas;
+- real workflow state through “Ready to configure analysis” without starting analysis;
+- typed OpenAPI contracts, sanitized error categories, unit tests, and a mocked Playwright flow.
 
-**Planned for later phases:** Oracle connection UI, schema discovery, analysis execution, relationship exploration, ERD rendering, exports, and run history. None of these workflows are represented as implemented today.
+**Planned for later phases:** analysis configuration/execution, progress, relationship exploration, ERD rendering, exports, and run history. The Analysis route is only an explicit locked placeholder.
 
 ### GUI architecture
 
 ```text
 React + TypeScript (gui/web)
         ↓ relative /api
-FastAPI adapter (gui/api)
-        ↓ future orchestration
+FastAPI local adapter (gui/api)
+        ↓ request-scoped context manager
 ReliFinder Python core (src/oracle_relationship_discovery)
-        ↓
+        ↓ SELECT-only operations
 Oracle
 ```
 
-FastAPI is an adapter boundary; scoring, inference, sampling, and cardinality logic remain in the existing core. There is no GUI database, authentication layer, telemetry, remote font, CDN asset, or cloud dependency.
+FastAPI is an adapter boundary; scoring, inference, sampling, and cardinality logic remain in the existing core. There is no GUI database, authentication layer, telemetry, remote font, CDN runtime asset, or cloud dependency.
+
+`POST /api/connections` verifies Oracle and captures schema summaries during one bounded connection. The Oracle connection is always closed when that request finishes. The supplied password is held only in a temporary in-memory buffer and cleared immediately after verification. The returned opaque session stores only the metadata snapshot—no password and no live Oracle connection. `GET /api/connections/{id}/schemas` reads that snapshot, and `DELETE /api/connections/{id}` invalidates it. Restarting the API invalidates every session.
+
+System classification uses `ALL_USERS.ORACLE_MAINTAINED` when Oracle provides it. On older versions, only the conservative `SYS` and `SYSTEM` fallback is classified as system. The UI hides classified system schemas by default but provides an explicit toggle; no application-schema blacklist is used.
 
 ### GUI requirements and setup
 
@@ -333,7 +338,7 @@ pnpm generate:api
 pnpm dev
 ```
 
-Vite listens on `127.0.0.1:5173` and proxies `/api` to `127.0.0.1:8000`. `pnpm generate:api` creates `src/api/schema.d.ts` from the backend OpenAPI document; the generated file must not be edited manually. Production assets are created by `pnpm build` in `gui/web/dist/`; serving them from FastAPI is intentionally deferred.
+Vite listens on `127.0.0.1:5173` and proxies `/api` to `127.0.0.1:8000`. `pnpm generate:api` creates `src/api/schema.d.ts` from FastAPI OpenAPI; the generated file must not be edited manually. Production assets are created in `gui/web/dist/`; serving them from FastAPI remains deferred.
 
 Frontend verification commands are:
 
@@ -351,10 +356,13 @@ If the Playwright CDN is unavailable but system Chrome is installed, set `PLAYWR
 ### GUI security conventions
 
 - API development binds to `127.0.0.1`; no permissive CORS middleware is installed.
-- Credentials must never be stored in browser persistence, URLs, logs, or `VITE_*` variables.
-- Vite environment variables are public client data and must never contain Oracle secrets.
-- Frontend-visible API errors are sanitized and contain no stack traces, credentials, or filesystem paths.
-- Theme preference is the only browser-persisted value in Phase 1.
+- Credentials are never stored by ReliFinder in browser persistence, files, URLs, logs, API responses, or `VITE_*` variables.
+- The password field uses `autocomplete="current-password"`: standard browser password managers are not deliberately disabled, but their behavior is controlled by the browser rather than ReliFinder.
+- Frontend-visible Oracle failures are mapped to safe categories and contain no raw descriptors, tracebacks, credentials, or filesystem paths.
+- Theme preference is the only browser-persisted application value.
+- ReliFinder itself executes SELECT statements only. This does **not** prove that the supplied Oracle account lacks write privileges.
+
+Actual Oracle connection behavior requires integration testing against a real Oracle instance.
 
 ## Architecture and privacy
 
@@ -645,7 +653,7 @@ python -m compileall -q src gui/api
 
 Unit tests cover name normalization, datatype compatibility, generic-ID protection, candidate generation, score reliability, confidence labels, cardinality, composite-key safety, report privacy, run isolation, logging, and the SELECT-only SQL guard.
 
-Tests do not mock Oracle and do not claim that real Oracle queries have been verified. Integration testing is required against each target Oracle version and workload profile.
+GUI unit tests replace the Oracle gateway boundary and never require a database. They do not claim that real Oracle queries have been verified. Integration testing is required against each target Oracle version, driver mode, network configuration, and workload profile.
 
 ## Known limitations
 
@@ -655,7 +663,8 @@ Tests do not mock Oracle and do not claim that real Oracle queries have been ver
 - Only conventional uppercase-compatible Oracle identifiers are supported.
 - Synonyms, views, and partition-specific strategies are not analyzed yet.
 - Existing Foreign Keys are not emitted as discovered logical relationships in this version.
-- The GUI currently provides foundation infrastructure only; Oracle workflows and production static serving are deferred to later phases.
+- The GUI stops after secure connection verification and schema selection; analysis execution and production static serving are deferred to later phases.
+- Connection sessions contain a metadata snapshot only, expire after inactivity, and do not survive an API restart.
 
 ## Contributing
 

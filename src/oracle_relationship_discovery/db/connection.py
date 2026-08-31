@@ -45,10 +45,32 @@ def execute_select(
 @contextmanager
 def connect(config: DatabaseConfig, timeout_seconds: int) -> Iterator[Any]:
     """Open an Oracle connection; call_timeout is a client-side cancellation guard."""
+    with connect_with_credentials(
+        host=config.host,
+        port=config.port,
+        service_name=config.service_name,
+        username=config.username,
+        password=config.password(),
+        timeout_seconds=timeout_seconds,
+    ) as connection:
+        yield connection
+
+
+@contextmanager
+def connect_with_credentials(
+    *,
+    host: str,
+    port: int,
+    service_name: str,
+    username: str,
+    password: str,
+    timeout_seconds: int,
+) -> Iterator[Any]:
+    """Open a bounded direct connection for runtime-only GUI credentials."""
     import oracledb
 
-    dsn = oracledb.makedsn(config.host, config.port, service_name=config.service_name)
-    connection = oracledb.connect(user=config.username, password=config.password(), dsn=dsn)
+    dsn = oracledb.makedsn(host, port, service_name=service_name)
+    connection = oracledb.connect(user=username, password=password, dsn=dsn)
     connection.call_timeout = timeout_seconds * 1000
     try:
         yield connection

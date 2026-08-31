@@ -16,11 +16,11 @@ function renderApp(path = "/") {
 }
 
 describe("ReliFinder application foundation", () => {
-  it("renders the workbench shell and backend health", async () => {
+  it("renders the connection shell and backend health", async () => {
     renderApp();
 
     expect(screen.getByText("ReliFinder")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "ReliFinder workbench" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Secure Oracle connection" })).toBeInTheDocument();
     expect(await screen.findByText("Local Core: Healthy")).toBeInTheDocument();
   });
 
