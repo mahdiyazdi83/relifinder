@@ -51,3 +51,16 @@ sqlnet.ora
 /.agent
 /.agent/
 /analysis-results*.json
+
+# Local GUI development and generated frontend artifacts
+/gui/web/node_modules/
+/gui/web/dist/
+/gui/web/coverage/
+/gui/web/playwright-report/
+/gui/web/test-results/
+/gui/web/.vite/
+/gui/web/.eslintcache
+/gui/web/openapi.json
+/gui/web/.env
+/gui/web/.env.*
+!/gui/web/.env.example

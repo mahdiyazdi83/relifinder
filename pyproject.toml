@@ -41,7 +41,18 @@ Repository = "https://github.com/mahdiyazdi83/relifinder.git"
 Issues = "https://github.com/mahdiyazdi83/relifinder/issues"
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "ruff>=0.6"]
+dev = [
+  "fastapi>=0.141,<0.142",
+  "httpx2>=2.12,<3",
+  "pydantic>=2.13,<3",
+  "pytest>=8.0",
+  "ruff>=0.6",
+]
+gui = [
+  "fastapi>=0.141,<0.142",
+  "pydantic>=2.13,<3",
+  "uvicorn>=0.52,<0.53",
+]
 
 [project.scripts]
 oracle-relationship-discovery = "oracle_relationship_discovery.cli:main"

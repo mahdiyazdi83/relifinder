@@ -281,7 +281,82 @@ The self-contained report works directly from disk and includes:
 
 ReliFinder discovers probable logical relationships; the ERD only visualizes those inferences. It never converts them into Oracle Foreign Key constraints. DBML is used because it is portable, reviewable text with native schema-qualified tables.
 
-### Architecture and privacy
+### GUI foundation (Phase 1)
+
+The GUI is an **early local-first foundation**, not a complete database workflow. Phase 1 implements the application shell and API boundary while keeping the existing Python inference core authoritative.
+
+**Implemented:**
+
+- restrained technical workbench shell with dark and light themes;
+- centralized React Router configuration and a Not Found route;
+- TanStack Query health check against `GET /api/health`;
+- typed API contracts generated from FastAPI OpenAPI;
+- sanitized API error contract and a relative `/api` client;
+- Vitest/Testing Library tests and one Playwright shell smoke test;
+- static production output in `gui/web/dist/`.
+
+**Planned for later phases:** Oracle connection UI, schema discovery, analysis execution, relationship exploration, ERD rendering, exports, and run history. None of these workflows are represented as implemented today.
+
+### GUI architecture
+
+```text
+React + TypeScript (gui/web)
+        ↓ relative /api
+FastAPI adapter (gui/api)
+        ↓ future orchestration
+ReliFinder Python core (src/oracle_relationship_discovery)
+        ↓
+Oracle
+```
+
+FastAPI is an adapter boundary; scoring, inference, sampling, and cardinality logic remain in the existing core. There is no GUI database, authentication layer, telemetry, remote font, CDN asset, or cloud dependency.
+
+### GUI requirements and setup
+
+- Python 3.11+
+- Node.js 24 LTS (`gui/web/.nvmrc`)
+- pnpm 11 (`packageManager` is pinned in `package.json`)
+
+From the repository root, install the optional GUI and development dependencies and start the loopback-only API:
+
+```bash
+python -m pip install -e ".[gui,dev]"
+python -m uvicorn gui.api.app:app --host 127.0.0.1 --port 8000 --reload
+```
+
+In a second terminal with the same Python environment activated:
+
+```bash
+cd gui/web
+pnpm install
+pnpm generate:api
+pnpm dev
+```
+
+Vite listens on `127.0.0.1:5173` and proxies `/api` to `127.0.0.1:8000`. `pnpm generate:api` creates `src/api/schema.d.ts` from the backend OpenAPI document; the generated file must not be edited manually. Production assets are created by `pnpm build` in `gui/web/dist/`; serving them from FastAPI is intentionally deferred.
+
+Frontend verification commands are:
+
+```bash
+pnpm lint
+pnpm typecheck
+pnpm test:run
+pnpm build
+pnpm exec playwright install chromium
+pnpm test:e2e
+```
+
+If the Playwright CDN is unavailable but system Chrome is installed, set `PLAYWRIGHT_CHANNEL=chrome` for the E2E command.
+
+### GUI security conventions
+
+- API development binds to `127.0.0.1`; no permissive CORS middleware is installed.
+- Credentials must never be stored in browser persistence, URLs, logs, or `VITE_*` variables.
+- Vite environment variables are public client data and must never contain Oracle secrets.
+- Frontend-visible API errors are sanitized and contain no stack traces, credentials, or filesystem paths.
+- Theme preference is the only browser-persisted value in Phase 1.
+
+## Architecture and privacy
 
 ~~~text
 Oracle analysis
@@ -429,9 +504,88 @@ performance:
 
 </details>
 
+## GUI foundation (Phase 1)
+
+The GUI is an **early local-first foundation**, not a complete database workflow. Phase 1 implements the application shell and API boundary while keeping the existing Python inference core authoritative.
+
+**Implemented:**
+
+- restrained technical workbench shell with dark and light themes;
+- centralized React Router configuration and a Not Found route;
+- TanStack Query health check against `GET /api/health`;
+- typed API contracts generated from FastAPI OpenAPI;
+- sanitized API error contract and a relative `/api` client;
+- Vitest/Testing Library tests and one Playwright shell smoke test;
+- static production output in `gui/web/dist/`.
+
+**Planned for later phases:** Oracle connection UI, schema discovery, analysis execution, relationship exploration, ERD rendering, exports, and run history. None of these workflows are represented as implemented today.
+
+### GUI architecture
+
+```text
+React + TypeScript (gui/web)
+        ↓ relative /api
+FastAPI adapter (gui/api)
+        ↓ future orchestration
+ReliFinder Python core (src/oracle_relationship_discovery)
+        ↓
+Oracle
+```
+
+FastAPI is an adapter boundary; scoring, inference, sampling, and cardinality logic remain in the existing core. There is no GUI database, authentication layer, telemetry, remote font, CDN asset, or cloud dependency.
+
+### GUI requirements and setup
+
+- Python 3.11+
+- Node.js 24 LTS (`gui/web/.nvmrc`)
+- pnpm 11 (`packageManager` is pinned in `package.json`)
+
+From the repository root, install the optional GUI and development dependencies and start the loopback-only API:
+
+```bash
+python -m pip install -e ".[gui,dev]"
+python -m uvicorn gui.api.app:app --host 127.0.0.1 --port 8000 --reload
+```
+
+In a second terminal with the same Python environment activated:
+
+```bash
+cd gui/web
+pnpm install
+pnpm generate:api
+pnpm dev
+```
+
+Vite listens on `127.0.0.1:5173` and proxies `/api` to `127.0.0.1:8000`. `pnpm generate:api` creates `src/api/schema.d.ts` from the backend OpenAPI document; the generated file must not be edited manually. Production assets are created by `pnpm build` in `gui/web/dist/`; serving them from FastAPI is intentionally deferred.
+
+Frontend verification commands are:
+
+```bash
+pnpm lint
+pnpm typecheck
+pnpm test:run
+pnpm build
+pnpm exec playwright install chromium
+pnpm test:e2e
+```
+
+If the Playwright CDN is unavailable but system Chrome is installed, set `PLAYWRIGHT_CHANNEL=chrome` for the E2E command.
+
+### GUI security conventions
+
+- API development binds to `127.0.0.1`; no permissive CORS middleware is installed.
+- Credentials must never be stored in browser persistence, URLs, logs, or `VITE_*` variables.
+- Vite environment variables are public client data and must never contain Oracle secrets.
+- Frontend-visible API errors are sanitized and contain no stack traces, credentials, or filesystem paths.
+- Theme preference is the only browser-persisted value in Phase 1.
+
 ## Architecture
 
 ```text
+gui/
+├── api/                 # FastAPI adapter and OpenAPI source
+└── web/                 # React/Vite local workbench
+
 src/oracle_relationship_discovery/
 ├── analysis/
 │   ├── candidate_generator.py
@@ -474,14 +628,19 @@ The analysis package is pure Python logic and has no Oracle dependency. Database
 | pytest | Oracle-independent unit tests |
 | Ruff | Formatting and static quality checks |
 | Hatchling | Standards-based package builds |
+| FastAPI 0.141 / Pydantic 2.13 | Local GUI adapter and contracts |
+| React 19 / React Router 7 | GUI shell and routing |
+| TanStack Query 5 / Zod 4 | Server state and runtime validation |
+| Vite 8 / TypeScript 5.9 / Tailwind CSS 4 | Strict frontend toolchain and design tokens |
+| Vitest 4 / Testing Library / Playwright 1.62 | Frontend unit and smoke testing |
 
 ## Development
 
 ```bash
 python -m pip install -e ".[dev]"
 pytest
-ruff check src tests
-python -m compileall -q src
+ruff check src tests gui/api
+python -m compileall -q src gui/api
 ```
 
 Unit tests cover name normalization, datatype compatibility, generic-ID protection, candidate generation, score reliability, confidence labels, cardinality, composite-key safety, report privacy, run isolation, logging, and the SELECT-only SQL guard.
@@ -496,6 +655,7 @@ Tests do not mock Oracle and do not claim that real Oracle queries have been ver
 - Only conventional uppercase-compatible Oracle identifiers are supported.
 - Synonyms, views, and partition-specific strategies are not analyzed yet.
 - Existing Foreign Keys are not emitted as discovered logical relationships in this version.
+- The GUI currently provides foundation infrastructure only; Oracle workflows and production static serving are deferred to later phases.
 
 ## Contributing
 

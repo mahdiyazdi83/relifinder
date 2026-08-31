@@ -1,0 +1,1 @@
+"""Public GUI API schemas."""
