@@ -6,6 +6,13 @@ export type ConnectionCreateRequest = components["schemas"]["ConnectionCreateReq
 export type ConnectionResponse = components["schemas"]["ConnectionResponse"];
 export type SchemaListResponse = components["schemas"]["SchemaListResponse"];
 export type SchemaSummary = components["schemas"]["SchemaSummaryResponse"];
+export type AnalysisConfiguration = components["schemas"]["AnalysisConfiguration"];
+export type AnalysisProfile = components["schemas"]["AnalysisProfile"];
+export type RunCreateRequest = components["schemas"]["RunCreateRequest"];
+export type RunCreateResponse = components["schemas"]["RunCreateResponse"];
+export type RunStatusResponse = components["schemas"]["RunStatusResponse"];
+export type RunProgressEvent = Omit<RunStatusResponse, "connection_id" | "selected_schemas">;
+export type RunCancelResponse = components["schemas"]["RunCancelResponse"];
 
 async function requestJson<T>(input: string, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {
@@ -51,4 +58,21 @@ export async function disconnectConnection(connectionId: string): Promise<void> 
   if (!response.ok) {
     throw await toApiRequestError(response);
   }
+}
+
+export function createRun(payload: RunCreateRequest): Promise<RunCreateResponse> {
+  return requestJson<RunCreateResponse>("/api/runs", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getRun(runId: string, signal?: AbortSignal): Promise<RunStatusResponse> {
+  return requestJson<RunStatusResponse>(`/api/runs/${encodeURIComponent(runId)}`, { signal });
+}
+
+export function cancelRun(runId: string): Promise<RunCancelResponse> {
+  return requestJson<RunCancelResponse>(`/api/runs/${encodeURIComponent(runId)}/cancel`, {
+    method: "POST",
+  });
 }

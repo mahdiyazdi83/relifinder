@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from collections.abc import Callable
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from typing import Protocol
 
 from oracle_relationship_discovery.analysis.cardinality import infer_cardinality
@@ -20,6 +21,10 @@ LOGGER = logging.getLogger(__name__)
 
 class CandidateSampler(Protocol):
     def validate(self, candidate: RelationshipCandidate) -> None: ...
+
+
+class CancellationCheck(Protocol):
+    def raise_if_cancelled(self) -> None: ...
 
 
 def _finish(
@@ -53,10 +58,17 @@ def _finish(
 
 
 def validate_candidates(
-    candidates: list[RelationshipCandidate], sampler_factory, config: AppConfig
+    candidates: list[RelationshipCandidate],
+    sampler_factory,
+    config: AppConfig,
+    *,
+    cancellation: CancellationCheck | None = None,
+    progress_callback: Callable[[int, int], None] | None = None,
 ) -> tuple[list[RelationshipCandidate], int]:
     if not config.sampling.enabled:
         for candidate in candidates:
+            if cancellation:
+                cancellation.raise_if_cancelled()
             candidate.evidence.status = ValidationStatus.SKIPPED
             candidate.evidence.message = "Sampling was disabled; score uses metadata evidence only."
             candidate.final_score = candidate.preliminary
@@ -70,13 +82,38 @@ def validate_candidates(
         candidate.evidence.message = "Skipped because candidate_validation_limit was reached."
         candidate.final_score = candidate.preliminary
 
-    with ThreadPoolExecutor(max_workers=config.performance.max_workers) as executor:
-        futures = {
-            executor.submit(
-                _finish, candidate, sampler_factory(), config.analysis.weights
-            ): candidate
-            for candidate in selected
-        }
-        for future in as_completed(futures):
-            future.result()
+    total = len(selected)
+    completed = 0
+    pending: dict[Future[RelationshipCandidate], RelationshipCandidate] = {}
+    remaining = iter(selected)
+    executor = ThreadPoolExecutor(max_workers=config.performance.max_workers)
+    try:
+        for candidate in remaining:
+            if cancellation:
+                cancellation.raise_if_cancelled()
+            pending[
+                executor.submit(_finish, candidate, sampler_factory(), config.analysis.weights)
+            ] = candidate
+            if len(pending) >= config.performance.max_workers:
+                break
+
+        while pending:
+            done, _ = wait(pending, return_when=FIRST_COMPLETED)
+            for future in done:
+                pending.pop(future)
+                future.result()
+                completed += 1
+                if progress_callback:
+                    progress_callback(completed, total)
+            if cancellation:
+                cancellation.raise_if_cancelled()
+            for _ in range(len(done)):
+                candidate = next(remaining, None)
+                if candidate is None:
+                    break
+                pending[
+                    executor.submit(_finish, candidate, sampler_factory(), config.analysis.weights)
+                ] = candidate
+    finally:
+        executor.shutdown(wait=True, cancel_futures=True)
     return sorted(candidates, key=lambda item: -item.score), len(skipped)

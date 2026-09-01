@@ -3,8 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
-from gui.api.services.connection_sessions import RuntimeCredentials
-from oracle_relationship_discovery.db.connection import connect_with_credentials, execute_select
+from gui.api.services.connection_sessions import RuntimeCredentials, RuntimeResource
+from oracle_relationship_discovery.db.connection import (
+    create_pool_with_credentials,
+    execute_select,
+)
 from oracle_relationship_discovery.db.metadata_repository import MetadataRepository
 from oracle_relationship_discovery.models import SchemaSummary
 
@@ -12,6 +15,7 @@ from oracle_relationship_discovery.models import SchemaSummary
 @dataclass(frozen=True, slots=True)
 class OracleDiscoveryResult:
     schemas: tuple[SchemaSummary, ...]
+    resource: RuntimeResource | None = None
 
 
 class OracleGatewayError(RuntimeError):
@@ -31,15 +35,16 @@ class CoreOracleGateway:
         self.timeout_seconds = timeout_seconds
 
     def verify_and_discover(self, credentials: RuntimeCredentials) -> OracleDiscoveryResult:
+        resource = None
         try:
-            with connect_with_credentials(
+            resource = create_pool_with_credentials(
                 host=credentials.host,
                 port=credentials.port,
                 service_name=credentials.service_name,
                 username=credentials.username,
                 password=credentials.password_text(),
-                timeout_seconds=self.timeout_seconds,
-            ) as connection:
+            )
+            with resource.acquire(self.timeout_seconds) as connection:
                 with connection.cursor() as cursor:
                     row = execute_select(cursor, "SELECT 1 FROM DUAL").fetchone()
                     if not row or row[0] != 1:
@@ -60,10 +65,14 @@ class CoreOracleGateway:
                         "The Oracle account cannot read all metadata required by ReliFinder.",
                         403,
                     ) from None
-                return OracleDiscoveryResult(tuple(schemas))
+            return OracleDiscoveryResult(tuple(schemas), resource)
         except OracleGatewayError:
+            if resource:
+                resource.close()
             raise
         except Exception as exc:  # noqa: BLE001 - Oracle exposes multiple driver error types.
+            if resource:
+                resource.close()
             raise _sanitized_connection_error(exc) from None
 
 

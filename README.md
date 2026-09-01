@@ -281,38 +281,41 @@ The self-contained report works directly from disk and includes:
 
 ReliFinder discovers probable logical relationships; the ERD only visualizes those inferences. It never converts them into Oracle Foreign Key constraints. DBML is used because it is portable, reviewable text with native schema-qualified tables.
 
-### GUI connection and schema discovery (Phase 2)
+### GUI analysis workflow (Phase 3)
 
-The GUI is a **local-first developer workbench**. Phase 2 adds secure Oracle connection verification and metadata-only schema selection while keeping the existing Python inference core authoritative.
+The GUI is a **local-first developer workbench**. It now covers secure Oracle connection, schema selection, analysis configuration, background execution, real progress, cooperative cancellation, and a completed-run summary while keeping the Python inference core authoritative.
 
 **Implemented:**
 
-- connection form for host, port, service name, username, and password;
-- request-scoped Oracle authentication and trivial `SELECT 1 FROM DUAL` verification;
-- required access checks for `ALL_TABLES`, `ALL_TAB_COLUMNS`, `ALL_CONSTRAINTS`, and `ALL_CONS_COLUMNS`;
-- runtime session IDs with a 15-minute idle timeout, a 16-session bound, replacement, and disconnect;
-- deterministic schema summaries from Oracle metadata with table and column counts;
-- search, individual selection, select-visible, clear, selected totals, and optional system schemas;
-- real workflow state through “Ready to configure analysis” without starting analysis;
-- typed OpenAPI contracts, sanitized error categories, unit tests, and a mocked Playwright flow.
+- Fast, Balanced (default), Thorough, and explicit Custom analysis profiles;
+- synchronized simple controls and a collapsed Advanced section using only current core options;
+- authoritative frontend and backend bounds for confidence, sampling, workers, validation limits, bind batches, and query timeouts;
+- non-blocking POST /api/runs, recoverable GET /api/runs/{id}, SSE GET /api/runs/{id}/events, and cooperative POST /api/runs/{id}/cancel;
+- real metadata, candidate, validation, scoring, and artifact states from reusable core progress hooks;
+- numeric progress only when the core knows the numerator and denominator;
+- one active run per Oracle connection, sanitized failures, retry/reconnect states, and concise completed statistics;
+- incomplete GUI artifacts isolated under output/.incomplete/ and never presented as completed output;
+- generated OpenAPI contracts, backend/React tests, and a mocked end-to-end workflow.
 
-**Planned for later phases:** analysis configuration/execution, progress, relationship exploration, ERD rendering, exports, and run history. The Analysis route is only an explicit locked placeholder.
+**Planned for later phases:** relationship exploration, relationship details, ERD rendering, DBML viewing, downloads, review, persistence, and run history. The Results route is intentionally a Phase 4 placeholder.
 
 ### GUI architecture
 
-```text
+~~~text
 React + TypeScript (gui/web)
-        ↓ relative /api
-FastAPI local adapter (gui/api)
-        ↓ request-scoped context manager
+        ↓ relative /api + SSE
+FastAPI local adapter and in-memory run manager (gui/api)
+        ↓ reusable analysis service + cooperative token
 ReliFinder Python core (src/oracle_relationship_discovery)
-        ↓ SELECT-only operations
+        ↓ bounded SELECT-only Oracle pool
 Oracle
-```
+~~~
 
-FastAPI is an adapter boundary; scoring, inference, sampling, and cardinality logic remain in the existing core. There is no GUI database, authentication layer, telemetry, remote font, CDN runtime asset, or cloud dependency.
+CLI and GUI call the same core analysis pipeline. FastAPI owns only local session/job lifecycle and transport; scoring, inference, sampling, cardinality, and artifact writing remain in the core. There is no GUI database, external queue, telemetry, remote font, CDN runtime asset, or cloud dependency.
 
-`POST /api/connections` verifies Oracle and captures schema summaries during one bounded connection. The Oracle connection is always closed when that request finishes. The supplied password is held only in a temporary in-memory buffer and cleared immediately after verification. The returned opaque session stores only the metadata snapshot—no password and no live Oracle connection. `GET /api/connections/{id}/schemas` reads that snapshot, and `DELETE /api/connections/{id}` invalidates it. Restarting the API invalidates every session.
+POST /api/connections creates a bounded, in-memory Oracle pool, verifies the account, and captures schema summaries. The supplied password is held only in a temporary application buffer and cleared immediately after pool creation; it is never returned, logged, written to files, or stored in browser state. The opaque runtime session owns the pool and metadata snapshot until disconnect, idle expiry, eviction, or API shutdown. Active analysis leases prevent expiry/close while a run is using the resource.
+
+Runs execute in a local background thread and do not keep the creation request open. Progress events are compact aggregate metadata only and never contain sampled values. Cancellation stops new validation scheduling and is observed between bounded operations; an Oracle call already in progress may finish or reach its configured timeout first. The frontend does not persist run IDs. A browser refresh can therefore lose navigation to a run, but the backend job remains safe until process shutdown.
 
 System classification uses `ALL_USERS.ORACLE_MAINTAINED` when Oracle provides it. On older versions, only the conservative `SYS` and `SYSTEM` fallback is classified as system. The UI hides classified system schemas by default but provides an explicit toggle; no application-schema blacklist is used.
 
@@ -653,7 +656,7 @@ python -m compileall -q src gui/api
 
 Unit tests cover name normalization, datatype compatibility, generic-ID protection, candidate generation, score reliability, confidence labels, cardinality, composite-key safety, report privacy, run isolation, logging, and the SELECT-only SQL guard.
 
-GUI unit tests replace the Oracle gateway boundary and never require a database. They do not claim that real Oracle queries have been verified. Integration testing is required against each target Oracle version, driver mode, network configuration, and workload profile.
+GUI tests replace the Oracle gateway and analysis-executor boundaries and never require a database. They cover run state transitions, progress serialization, cancellation, completed/failed states, and the mocked browser workflow. They do not claim that real Oracle queries have been verified. Integration testing is required against each target Oracle version, driver mode, network configuration, and workload profile.
 
 ## Known limitations
 
@@ -663,8 +666,9 @@ GUI unit tests replace the Oracle gateway boundary and never require a database.
 - Only conventional uppercase-compatible Oracle identifiers are supported.
 - Synonyms, views, and partition-specific strategies are not analyzed yet.
 - Existing Foreign Keys are not emitted as discovered logical relationships in this version.
-- The GUI stops after secure connection verification and schema selection; analysis execution and production static serving are deferred to later phases.
-- Connection sessions contain a metadata snapshot only, expire after inactivity, and do not survive an API restart.
+- Relationship exploration, ERD rendering, exports UI, and run history are deferred to later GUI phases.
+- Connection sessions and run state are in memory, expire or disappear with API restart, and the frontend does not persist run IDs.
+- Cooperative cancellation cannot force-kill an in-flight Oracle call; it takes effect at the next safe boundary or configured query timeout.
 
 ## Contributing
 

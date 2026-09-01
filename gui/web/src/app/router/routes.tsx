@@ -1,9 +1,10 @@
 import type { RouteObject } from "react-router-dom";
 
+import { AnalysisPage } from "../../features/analysis/analysis-page";
 import { ConnectionWorkspace } from "../../features/connection/connection-workspace";
 import { AppShell } from "../layout/app-shell";
-import { AnalysisPlaceholderPage } from "./analysis-placeholder-page";
 import { NotFoundPage } from "./not-found-page";
+import { ResultsPlaceholderPage } from "./results-placeholder-page";
 
 export const appRoutes: RouteObject[] = [
   {
@@ -11,7 +12,8 @@ export const appRoutes: RouteObject[] = [
     element: <AppShell />,
     children: [
       { index: true, element: <ConnectionWorkspace /> },
-      { path: "analysis", element: <AnalysisPlaceholderPage /> },
+      { path: "analysis", element: <AnalysisPage /> },
+      { path: "results", element: <ResultsPlaceholderPage /> },
       { path: "*", element: <NotFoundPage /> },
     ],
   },

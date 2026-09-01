@@ -9,19 +9,15 @@ from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
+from oracle_relationship_discovery.analysis.service import AnalysisProgress, run_analysis
 from oracle_relationship_discovery.config import AnalysisConfig, AppConfig, load_config
-from oracle_relationship_discovery.models import AnalysisStats, ValidationStatus
-from oracle_relationship_discovery.output.analysis_results import write_analysis_results
-from oracle_relationship_discovery.output.csv_report import write_csv
+from oracle_relationship_discovery.models import ValidationStatus
 from oracle_relationship_discovery.output.erd_builder import (
-    build_erd_model,
     load_erd_model,
     resolve_offline_source,
 )
 from oracle_relationship_discovery.output.erd_models import ErdExportOptions
 from oracle_relationship_discovery.output.erd_service import export_erd
-from oracle_relationship_discovery.output.html_report import write_html
-from oracle_relationship_discovery.output.schema_metadata import write_schema_metadata
 
 LOGGER = logging.getLogger(__name__)
 ERD_SCOPES = ("full", "schema", "cross-schema")
@@ -200,8 +196,26 @@ def run_analyze(args: argparse.Namespace) -> int:
         else config.analysis.min_report_confidence
     )
     _validate_percentage("--min-confidence", min_confidence)
+    config = replace(
+        config,
+        analysis=replace(config.analysis, min_report_confidence=min_confidence),
+    )
     erd_options = _erd_options(args, config)
-    erd_enabled = args.erd or config.erd.enabled
+    config = replace(
+        config,
+        erd=replace(
+            config.erd,
+            enabled=bool(args.erd or config.erd.enabled),
+            format=erd_options.format,
+            min_confidence=erd_options.min_confidence,
+            scope=erd_options.scope,
+            schemas=erd_options.schemas,
+            max_relationships=erd_options.max_relationships,
+            exclude_generic=erd_options.exclude_generic,
+            include_isolated_tables=erd_options.include_isolated_tables,
+            validation_statuses=erd_options.validation_statuses,
+        ),
+    )
 
     started_at = datetime.now().astimezone()
     mode = "sampled" if config.sampling.enabled else "metadata-only"
@@ -218,86 +232,17 @@ def run_analyze(args: argparse.Namespace) -> int:
     LOGGER.info("Run artifacts: %s", run_directory)
     LOGGER.info("Comprehensive log: %s", comprehensive_log)
 
-    from oracle_relationship_discovery.db.connection import connect, connection_pool
-    from oracle_relationship_discovery.db.data_sampler import OracleDataSampler
-    from oracle_relationship_discovery.db.metadata_repository import MetadataRepository
+    def report_progress(progress: AnalysisProgress) -> None:
+        suffix = ""
+        if progress.current is not None and progress.total is not None:
+            suffix = f" ({progress.current}/{progress.total})"
+        LOGGER.info("%s%s", progress.message, suffix)
 
-    LOGGER.info("[1/5] Reading metadata for %d configured schemas", len(config.schemas))
-    with connect(config.database, config.performance.query_timeout_seconds) as connection:
-        tables = MetadataRepository(connection).load(config.schemas)
-    columns = sum(len(table.columns) for table in tables)
-    write_schema_metadata(run_directory / "schema-metadata.json", tables, generated_at)
-
-    LOGGER.info(
-        "[2/5] Building metadata candidates from %d tables and %d columns", len(tables), columns
-    )
-    from oracle_relationship_discovery.analysis.candidate_generator import generate_candidates
-
-    candidates = generate_candidates(
-        tables,
-        config.analysis.metadata_candidate_threshold,
-        config.analysis.weights,
-        config.analysis.generic_entities,
-    )
-    LOGGER.info(
-        "[3/5] %d candidates passed metadata threshold %.1f",
-        len(candidates),
-        config.analysis.metadata_candidate_threshold,
-    )
-
-    LOGGER.info("[4/5] Validating candidates with bounded sampling=%s", config.sampling.enabled)
-    from oracle_relationship_discovery.analysis.relationship_validator import validate_candidates
-
-    if config.sampling.enabled:
-        with connection_pool(
-            config.database,
-            config.performance.query_timeout_seconds,
-            config.performance.max_workers,
-        ) as acquire_connection:
-            factory = lambda: OracleDataSampler(acquire_connection, config.sampling)
-            candidates, skipped_by_limit = validate_candidates(candidates, factory, config)
-    else:
-        candidates, skipped_by_limit = validate_candidates(candidates, lambda: None, config)
-
-    report_candidates = [candidate for candidate in candidates if candidate.score >= min_confidence]
-    validated = sum(
-        candidate.evidence.status == ValidationStatus.VALIDATED for candidate in candidates
-    )
-    stats = AnalysisStats(
-        schemas=len({table.schema for table in tables}),
-        tables=len(tables),
-        columns=columns,
-        candidates_generated=len(candidates),
-        candidates_validated=validated,
-        candidates_skipped_by_limit=skipped_by_limit,
-    )
-
-    erd_model = build_erd_model(tables, candidates)
-    write_analysis_results(
-        run_directory / "analysis-results.json",
-        erd_model.relationships,
-        mode,
-        generated_at,
-    )
-
-    erd_results = []
-    if erd_enabled:
-        LOGGER.info("Exporting %s ERD with scope=%s", erd_options.format, erd_options.scope)
-        erd_results = export_erd(
-            erd_model,
-            run_directory / "erd",
-            erd_options,
-        )
-
-    LOGGER.info("[5/5] Writing %d relationships to %s", len(report_candidates), run_directory)
-    write_csv(run_directory / "relationships.csv", report_candidates, mode, generated_at)
-    write_html(
-        run_directory / "relationship-report.html",
-        report_candidates,
-        stats,
-        analysis_mode=mode,
+    run_analysis(
+        config,
+        run_directory,
+        progress_callback=report_progress,
         generated_at=generated_at,
-        erd_exports=erd_results,
     )
     LOGGER.info("RUN COMPLETE: %s", run_directory.name)
     LOGGER.info("Analysis complete. Reports contain aggregate evidence only.")

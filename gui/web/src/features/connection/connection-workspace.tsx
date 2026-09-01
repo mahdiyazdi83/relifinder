@@ -190,7 +190,10 @@ export function ConnectionWorkspace() {
                 disabled={!ready}
                 onClick={() =>
                   navigate("/analysis", {
-                    state: { schemas: [...selectedSchemas].sort() },
+                    state: {
+                      connectionId: connection.connection_id,
+                      schemas: [...selectedSchemas].sort(),
+                    },
                   })
                 }
                 type="button"

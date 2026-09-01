@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import threading
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from typing import Any
@@ -29,7 +30,6 @@ def assert_select_only(sql: str) -> None:
     without_literals = re.sub(r"'[^']*'", "''", sql)
     if not SELECT_RE.match(without_literals) or FORBIDDEN_SQL_RE.search(without_literals):
         raise ValueError("Only SELECT statements are allowed")
-    # Semicolons are unnecessary with the driver and can hide additional statements.
     if ";" in without_literals:
         raise ValueError("SQL statement terminators are not allowed")
 
@@ -78,34 +78,76 @@ def connect_with_credentials(
         connection.close()
 
 
-@contextmanager
-def connection_pool(
-    config: DatabaseConfig, timeout_seconds: int, max_connections: int
-) -> Iterator[Callable[[], Any]]:
-    """Yield a context-manager factory backed by a small, fixed-size Oracle pool."""
+class RuntimeOraclePool:
+    """Opaque in-memory Oracle resource; the application never retains the password."""
+
+    def __init__(self, pool: Any) -> None:
+        self._pool = pool
+        self._closed = False
+        self._lock = threading.RLock()
+
+    @contextmanager
+    def acquire(self, timeout_seconds: int) -> Iterator[Any]:
+        with self._lock:
+            if self._closed:
+                raise RuntimeError("Oracle runtime pool is closed")
+            connection = self._pool.acquire()
+        connection.call_timeout = timeout_seconds * 1000
+        try:
+            yield connection
+        finally:
+            self._pool.release(connection)
+
+    def close(self) -> None:
+        with self._lock:
+            if not self._closed:
+                self._closed = True
+                self._pool.close(force=True)
+
+
+def create_pool_with_credentials(
+    *,
+    host: str,
+    port: int,
+    service_name: str,
+    username: str,
+    password: str,
+    max_connections: int = 8,
+) -> RuntimeOraclePool:
+    """Create a bounded runtime pool before the temporary password buffer is cleared."""
     import oracledb
 
-    dsn = oracledb.makedsn(config.host, config.port, service_name=config.service_name)
+    dsn = oracledb.makedsn(host, port, service_name=service_name)
     pool = oracledb.create_pool(
-        user=config.username,
-        password=config.password(),
+        user=username,
+        password=password,
         dsn=dsn,
         min=1,
         max=max_connections,
         increment=1,
         getmode=oracledb.POOL_GETMODE_WAIT,
     )
+    return RuntimeOraclePool(pool)
 
-    @contextmanager
-    def acquire() -> Iterator[Any]:
-        connection = pool.acquire()
-        connection.call_timeout = timeout_seconds * 1000
-        try:
-            yield connection
-        finally:
-            pool.release(connection)
+
+@contextmanager
+def connection_pool(
+    config: DatabaseConfig, timeout_seconds: int, max_connections: int
+) -> Iterator[Callable[[], Any]]:
+    """Yield a context-manager factory backed by a small, fixed-size Oracle pool."""
+    resource = create_pool_with_credentials(
+        host=config.host,
+        port=config.port,
+        service_name=config.service_name,
+        username=config.username,
+        password=config.password(),
+        max_connections=max_connections,
+    )
+
+    def acquire():
+        return resource.acquire(timeout_seconds)
 
     try:
         yield acquire
     finally:
-        pool.close(force=True)
+        resource.close()

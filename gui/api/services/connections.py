@@ -9,6 +9,7 @@ from gui.api.schemas.connections import (
 from gui.api.services.connection_sessions import (
     ConnectionSessionStore,
     RuntimeCredentials,
+    SessionBusyError,
     SessionNotFoundError,
 )
 from gui.api.services.oracle_gateway import OracleGateway, OracleGatewayError
@@ -34,16 +35,28 @@ class ConnectionService:
             username=request.username,
             password=request.password.get_secret_value(),
         )
+        resource = None
         try:
             result = self.gateway.verify_and_discover(credentials)
+            resource = result.resource
             schemas = _normalize_schemas(result.schemas)
             session = self.sessions.create(
                 schemas,
+                resource=resource,
                 replace_connection_id=request.replace_connection_id,
             )
+            resource = None
         except OracleGatewayError as exc:
             raise ApiProblem(exc.status_code, exc.code, exc.message) from None
+        except SessionBusyError:
+            raise ApiProblem(
+                409,
+                "CONNECTION_SESSION_BUSY",
+                "The Oracle connection session has an active analysis run.",
+            ) from None
         finally:
+            if resource:
+                resource.close()
             credentials.clear()
         return ConnectionResponse(
             connection_id=session.connection_id,
@@ -67,7 +80,15 @@ class ConnectionService:
         )
 
     def disconnect(self, connection_id: str) -> None:
-        if not self.sessions.delete(connection_id):
+        try:
+            deleted = self.sessions.delete(connection_id)
+        except SessionBusyError:
+            raise ApiProblem(
+                409,
+                "CONNECTION_SESSION_BUSY",
+                "Cancel the active analysis run before disconnecting.",
+            ) from None
+        if not deleted:
             raise _session_problem()
 
     def close(self) -> None:

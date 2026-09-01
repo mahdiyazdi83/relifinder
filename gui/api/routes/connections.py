@@ -10,7 +10,7 @@ from gui.api.services.connections import ConnectionService
 
 router = APIRouter(prefix="/connections", tags=["connections"])
 CONNECTION_ERROR_RESPONSES = {
-    code: {"model": ApiErrorResponse} for code in (400, 401, 403, 422, 502, 503, 504)
+    code: {"model": ApiErrorResponse} for code in (400, 401, 403, 409, 422, 502, 503, 504)
 }
 SESSION_ERROR_RESPONSES = {
     404: {"model": ApiErrorResponse},

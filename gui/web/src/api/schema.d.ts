@@ -72,10 +72,155 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Run */
+        post: operations["create_run_api_runs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Run */
+        get: operations["get_run_api_runs__run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runs/{run_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Run */
+        post: operations["cancel_run_api_runs__run_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runs/{run_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stream Run Events */
+        get: operations["stream_run_events_api_runs__run_id__events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AnalysisConfiguration */
+        AnalysisConfiguration: {
+            /**
+             * Bind Batch Size
+             * @default 500
+             */
+            bind_batch_size: number;
+            /**
+             * Candidate Validation Limit
+             * @default 1000
+             */
+            candidate_validation_limit: number;
+            /**
+             * Erd Exclude Generic
+             * @default false
+             */
+            erd_exclude_generic: boolean;
+            /**
+             * Erd Min Confidence
+             * @default 80
+             */
+            erd_min_confidence: number;
+            /**
+             * Erd Scope
+             * @default full
+             * @enum {string}
+             */
+            erd_scope: "full" | "schema" | "cross-schema";
+            /**
+             * Max Source Rows
+             * @default 3000
+             */
+            max_source_rows: number;
+            /**
+             * Max Target Rows
+             * @default 5000
+             */
+            max_target_rows: number;
+            /**
+             * Max Workers
+             * @default 2
+             */
+            max_workers: number;
+            /**
+             * Metadata Candidate Threshold
+             * @default 40
+             */
+            metadata_candidate_threshold: number;
+            /**
+             * Min Report Confidence
+             * @default 40
+             */
+            min_report_confidence: number;
+            /** @default BALANCED */
+            profile: components["schemas"]["AnalysisProfile"];
+            /**
+             * Query Timeout Seconds
+             * @default 15
+             */
+            query_timeout_seconds: number;
+            /**
+             * Sampling Enabled
+             * @default true
+             */
+            sampling_enabled: boolean;
+            /**
+             * Sampling Mode
+             * @default first
+             * @enum {string}
+             */
+            sampling_mode: "first" | "sample";
+        };
+        /**
+         * AnalysisProfile
+         * @enum {string}
+         */
+        AnalysisProfile: "FAST" | "BALANCED" | "THOROUGH" | "CUSTOM";
         /** ApiErrorDetail */
         ApiErrorDetail: {
             /** Code */
@@ -139,6 +284,11 @@ export interface components {
              */
             status: "connected";
         };
+        /** HTTPValidationError */
+        HTTPValidationError: {
+            /** Detail */
+            detail?: components["schemas"]["ValidationError"][];
+        };
         /** HealthResponse */
         HealthResponse: {
             /**
@@ -151,6 +301,80 @@ export interface components {
              * @constant
              */
             status: "ok";
+        };
+        /** RunCancelResponse */
+        RunCancelResponse: {
+            /** Run Id */
+            run_id: string;
+            status: components["schemas"]["RunState"];
+        };
+        /** RunCreateRequest */
+        RunCreateRequest: {
+            configuration?: components["schemas"]["AnalysisConfiguration"];
+            /** Connection Id */
+            connection_id: string;
+            /** Schemas */
+            schemas: string[];
+        };
+        /** RunCreateResponse */
+        RunCreateResponse: {
+            /** Run Id */
+            run_id: string;
+            status: components["schemas"]["RunState"];
+        };
+        /**
+         * RunState
+         * @enum {string}
+         */
+        RunState: "QUEUED" | "READING_METADATA" | "BUILDING_CANDIDATES" | "VALIDATING_CANDIDATES" | "SCORING" | "WRITING_ARTIFACTS" | "COMPLETED" | "FAILED" | "CANCEL_REQUESTED" | "CANCELLED";
+        /** RunStatusResponse */
+        RunStatusResponse: {
+            /** Connection Id */
+            connection_id: string;
+            /** Current */
+            current?: number | null;
+            /** Error Code */
+            error_code?: string | null;
+            /** Message */
+            message: string;
+            /** Run Id */
+            run_id: string;
+            /** Selected Schemas */
+            selected_schemas: string[];
+            /** Sequence */
+            sequence: number;
+            state: components["schemas"]["RunState"];
+            /** Stats */
+            stats?: {
+                [key: string]: number;
+            };
+            summary?: components["schemas"]["RunSummary"] | null;
+            /** Total */
+            total?: number | null;
+        };
+        /** RunSummary */
+        RunSummary: {
+            /** Candidates Generated */
+            candidates_generated: number;
+            /** Candidates Skipped */
+            candidates_skipped: number;
+            /** Candidates Validated */
+            candidates_validated: number;
+            /** Columns */
+            columns: number;
+            /** Elapsed Seconds */
+            elapsed_seconds: number;
+            /** Relationships In Report */
+            relationships_in_report: number;
+            /**
+             * Run Mode
+             * @enum {string}
+             */
+            run_mode: "sampled" | "metadata-only";
+            /** Schemas Analyzed */
+            schemas_analyzed: number;
+            /** Tables */
+            tables: number;
         };
         /** SchemaListResponse */
         SchemaListResponse: {
@@ -169,6 +393,19 @@ export interface components {
             oracle_maintained: boolean;
             /** Table Count */
             table_count: number;
+        };
+        /** ValidationError */
+        ValidationError: {
+            /** Context */
+            ctx?: Record<string, never>;
+            /** Input */
+            input?: unknown;
+            /** Location */
+            loc: (string | number)[];
+            /** Message */
+            msg: string;
+            /** Error Type */
+            type: string;
         };
     };
     responses: never;
@@ -221,6 +458,15 @@ export interface operations {
             };
             /** @description Forbidden */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -360,6 +606,226 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+        };
+    };
+    create_run_api_runs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunCreateResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    get_run_api_runs__run_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunStatusResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    cancel_run_api_runs__run_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunCancelResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    stream_run_events_api_runs__run_id__events_get: {
+        parameters: {
+            query?: {
+                after?: number;
+            };
+            header?: {
+                "Last-Event-ID"?: string | null;
+            };
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
