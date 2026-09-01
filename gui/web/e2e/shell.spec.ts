@@ -82,6 +82,81 @@ test("connects, configures Balanced, runs analysis, and reaches results", async 
       body: `id: 8\nevent: progress\ndata: ${JSON.stringify(completed)}\n\n`,
     });
   });
+  const relationshipId = "c".repeat(64);
+  const relationship = {
+    id: relationshipId,
+    source: {
+      schema_name: "CORE",
+      table_name: "ORDERS",
+      column_name: "CUSTOMER_ID",
+      datatype: "NUMBER",
+    },
+    target: {
+      schema_name: "CORE",
+      table_name: "CUSTOMERS",
+      column_name: "ID",
+      datatype: "NUMBER",
+    },
+    confidence_score: 96,
+    confidence_label: "HIGH",
+    cardinality: "Many-to-One",
+    validation_status: "VALIDATED",
+    match_ratio: 0.94,
+    cross_schema: false,
+    target_key_type: "PRIMARY_KEY",
+  };
+  await page.route("**/api/runs/*/relationships", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        run_id: runId,
+        summary: {
+          schemas_analyzed: 1,
+          tables: 7,
+          columns: 39,
+          candidates_generated: 42,
+          candidates_validated: 30,
+          candidates_skipped: 2,
+          relationships_in_report: 1,
+          run_mode: "sampled",
+          elapsed_seconds: 4.2,
+        },
+        total: 1,
+        relationships: [relationship],
+      }),
+    });
+  });
+  await page.route("**/api/runs/*/relationships/*", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        ...relationship,
+        score_breakdown: {
+          name: 20,
+          datatype: 15,
+          target_key: 20,
+          overlap: 29,
+          consistency: 7,
+          structure: 5,
+        },
+        validation: {
+          status: "VALIDATED",
+          sample_size: 100,
+          matched_values: 94,
+          unmatched_values: 6,
+          match_ratio: 0.94,
+          source_uniqueness_ratio: 0.61,
+          target_uniqueness_ratio: 1,
+          source_null_ratio: 0,
+          target_sample_size: 80,
+          sampling_used: true,
+        },
+        cardinality_confidence: 0.88,
+        cardinality_explanation: "Source values repeat while target values are unique.",
+        explanation: "Strong bounded evidence supports this relationship.",
+      }),
+    });
+  });
 
   await page.goto("/");
   await page.getByLabel("Host").fill("db.example.invalid");
@@ -105,7 +180,13 @@ test("connects, configures Balanced, runs analysis, and reaches results", async 
   await expect(page.getByRole("heading", { name: "Completed" })).toBeVisible();
   await expect(page.getByText("18")).toBeVisible();
   await page.getByRole("button", { name: "View Results" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Relationship results belong to Phase 4" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Relationship Explorer" })).toBeVisible();
+  await expect(page.getByText("CORE.ORDERS")).toBeVisible();
+  await page.getByText("CORE.ORDERS").click();
+  await expect(page.getByRole("heading", { name: "Score evidence" })).toBeVisible();
+  await expect(page.getByText("Strong bounded evidence supports this relationship.")).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByRole("complementary", { name: "Relationship inspector" })).toBeVisible();
+  await page.getByRole("button", { name: "Close inspector" }).click();
+  await expect(page.getByText("Select a relationship")).toBeVisible();
 });

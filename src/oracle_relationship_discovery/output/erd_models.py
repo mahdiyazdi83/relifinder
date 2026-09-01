@@ -47,6 +47,7 @@ class ErdRelationship:
     validation_status: str = "NOT_RUN"
     source_datatype: str = ""
     target_datatype: str = ""
+    target_key_type: str = "NONE"
     cardinality_confidence: float = 0
     cardinality_explanation: str = ""
     name_score: float = 0

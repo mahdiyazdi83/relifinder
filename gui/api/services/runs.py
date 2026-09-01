@@ -141,6 +141,14 @@ class CoreAnalysisExecutor(AnalysisExecutor):
             raise _safe_execution_error(exc) from None
 
 
+@dataclass(frozen=True, slots=True)
+class CompletedRun:
+    run_id: str
+    summary: RunSummary
+    run_directory: Path
+    min_report_confidence: float
+
+
 @dataclass(slots=True)
 class _RunRecord:
     run_id: str
@@ -152,6 +160,7 @@ class _RunRecord:
     events: list[RunProgressEvent] = field(default_factory=list)
     condition: threading.Condition = field(default_factory=threading.Condition)
     thread: threading.Thread | None = field(default=None, repr=False)
+    completed_directory: Path | None = field(default=None, repr=False)
 
 
 class RunService:
@@ -243,6 +252,26 @@ class RunService:
                 selected_schemas=record.selected_schemas,
             )
 
+    def completed(self, run_id: str) -> CompletedRun:
+        record = self._record(run_id)
+        with record.condition:
+            if (
+                record.latest.state != RunState.COMPLETED
+                or record.latest.summary is None
+                or record.completed_directory is None
+            ):
+                raise ApiProblem(
+                    409,
+                    "RUN_NOT_COMPLETED",
+                    "Relationship results are available only for a completed analysis run.",
+                )
+            return CompletedRun(
+                run_id=record.run_id,
+                summary=record.latest.summary,
+                run_directory=record.completed_directory,
+                min_report_confidence=record.configuration.min_report_confidence,
+            )
+
     def cancel(self, run_id: str) -> RunCancelResponse:
         record = self._record(run_id)
         with record.condition:
@@ -314,6 +343,7 @@ class RunService:
                 elapsed_seconds=result.elapsed_seconds,
             )
             with record.condition:
+                record.completed_directory = result.run_directory
                 self._publish_locked(
                     record,
                     RunState.COMPLETED,

@@ -136,7 +136,7 @@ export function AnalysisPage() {
               queryClient.removeQueries({ queryKey: ["run", runId] });
               setRunId(null);
             }}
-            onViewResults={() => navigate("/results", { state: { runId } })}
+            onViewResults={() => navigate(`/results?run=${encodeURIComponent(runId)}`)}
             run={run}
           />
         ) : statusQuery.isError ? (

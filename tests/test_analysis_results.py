@@ -26,6 +26,7 @@ def aggregate_relationship(score: float = 68) -> ErdRelationship:
         validation_status="VALIDATED",
         source_datatype="NUMBER",
         target_datatype="NUMBER",
+        target_key_type="PRIMARY_KEY",
         cardinality_confidence=0.91,
         cardinality_explanation="Target is unique.",
         name_score=31,
@@ -64,6 +65,7 @@ def test_analysis_results_round_trip_is_versioned_and_deterministic(tmp_path: Pa
     assert restored[0].sample_size == 200
     assert restored[0].source_null_ratio == pytest.approx(0.02)
     assert restored[0].cardinality_explanation == "Target is unique."
+    assert restored[0].target_key_type == "PRIMARY_KEY"
     assert restored[0].data_overlap_score == 20
 
 

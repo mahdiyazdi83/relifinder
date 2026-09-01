@@ -140,6 +140,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/runs/{run_id}/relationships": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Relationships */
+        get: operations["list_relationships_api_runs__run_id__relationships_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runs/{run_id}/relationships/{relationship_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Relationship Detail */
+        get: operations["relationship_detail_api_runs__run_id__relationships__relationship_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -301,6 +335,136 @@ export interface components {
              * @constant
              */
             status: "ok";
+        };
+        /** RelationshipDetail */
+        RelationshipDetail: {
+            /** Cardinality */
+            cardinality: string;
+            /** Cardinality Confidence */
+            cardinality_confidence: number;
+            /** Cardinality Explanation */
+            cardinality_explanation: string;
+            /**
+             * Confidence Label
+             * @enum {string}
+             */
+            confidence_label: "HIGH" | "MEDIUM-HIGH" | "MEDIUM" | "LOW" | "VERY LOW";
+            /** Confidence Score */
+            confidence_score: number;
+            /** Cross Schema */
+            cross_schema: boolean;
+            /** Explanation */
+            explanation: string;
+            /** Id */
+            id: string;
+            /** Match Ratio */
+            match_ratio?: number | null;
+            score_breakdown: components["schemas"]["RelationshipScoreBreakdown"];
+            source: components["schemas"]["RelationshipEndpoint"];
+            target: components["schemas"]["RelationshipEndpoint"];
+            /**
+             * Target Key Type
+             * @enum {string}
+             */
+            target_key_type: "PRIMARY_KEY" | "UNIQUE_KEY" | "NONE" | "COMPOSITE_KEY_COMPONENT";
+            validation: components["schemas"]["RelationshipValidationEvidence"];
+            /**
+             * Validation Status
+             * @enum {string}
+             */
+            validation_status: "VALIDATED" | "NOT_RUN" | "SKIPPED" | "FAILED";
+        };
+        /** RelationshipEndpoint */
+        RelationshipEndpoint: {
+            /** Column Name */
+            column_name: string;
+            /** Datatype */
+            datatype: string;
+            /** Schema Name */
+            schema_name: string;
+            /** Table Name */
+            table_name: string;
+        };
+        /** RelationshipListItem */
+        RelationshipListItem: {
+            /** Cardinality */
+            cardinality: string;
+            /**
+             * Confidence Label
+             * @enum {string}
+             */
+            confidence_label: "HIGH" | "MEDIUM-HIGH" | "MEDIUM" | "LOW" | "VERY LOW";
+            /** Confidence Score */
+            confidence_score: number;
+            /** Cross Schema */
+            cross_schema: boolean;
+            /** Id */
+            id: string;
+            /** Match Ratio */
+            match_ratio?: number | null;
+            source: components["schemas"]["RelationshipEndpoint"];
+            target: components["schemas"]["RelationshipEndpoint"];
+            /**
+             * Target Key Type
+             * @enum {string}
+             */
+            target_key_type: "PRIMARY_KEY" | "UNIQUE_KEY" | "NONE" | "COMPOSITE_KEY_COMPONENT";
+            /**
+             * Validation Status
+             * @enum {string}
+             */
+            validation_status: "VALIDATED" | "NOT_RUN" | "SKIPPED" | "FAILED";
+        };
+        /** RelationshipListResponse */
+        RelationshipListResponse: {
+            /** Relationships */
+            relationships: components["schemas"]["RelationshipListItem"][];
+            /** Run Id */
+            run_id: string;
+            summary: components["schemas"]["RunSummary"];
+            /** Total */
+            total: number;
+        };
+        /** RelationshipScoreBreakdown */
+        RelationshipScoreBreakdown: {
+            /** Consistency */
+            consistency: number;
+            /** Datatype */
+            datatype: number;
+            /** Name */
+            name: number;
+            /** Overlap */
+            overlap: number;
+            /** Structure */
+            structure: number;
+            /** Target Key */
+            target_key: number;
+        };
+        /** RelationshipValidationEvidence */
+        RelationshipValidationEvidence: {
+            /** Match Ratio */
+            match_ratio?: number | null;
+            /** Matched Values */
+            matched_values: number;
+            /** Sample Size */
+            sample_size: number;
+            /** Sampling Used */
+            sampling_used: boolean;
+            /** Source Null Ratio */
+            source_null_ratio?: number | null;
+            /** Source Uniqueness Ratio */
+            source_uniqueness_ratio?: number | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "VALIDATED" | "NOT_RUN" | "SKIPPED" | "FAILED";
+            /** Target Sample Size */
+            target_sample_size: number;
+            /** Target Uniqueness Ratio */
+            target_uniqueness_ratio?: number | null;
+            /** Unmatched Values */
+            unmatched_values: number;
         };
         /** RunCancelResponse */
         RunCancelResponse: {
@@ -826,6 +990,105 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_relationships_api_runs__run_id__relationships_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RelationshipListResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    relationship_detail_api_runs__run_id__relationships__relationship_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+                relationship_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RelationshipDetail"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
         };

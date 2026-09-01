@@ -13,6 +13,9 @@ export type RunCreateResponse = components["schemas"]["RunCreateResponse"];
 export type RunStatusResponse = components["schemas"]["RunStatusResponse"];
 export type RunProgressEvent = Omit<RunStatusResponse, "connection_id" | "selected_schemas">;
 export type RunCancelResponse = components["schemas"]["RunCancelResponse"];
+export type RelationshipListResponse = components["schemas"]["RelationshipListResponse"];
+export type RelationshipListItem = components["schemas"]["RelationshipListItem"];
+export type RelationshipDetail = components["schemas"]["RelationshipDetail"];
 
 async function requestJson<T>(input: string, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {
@@ -75,4 +78,25 @@ export function cancelRun(runId: string): Promise<RunCancelResponse> {
   return requestJson<RunCancelResponse>(`/api/runs/${encodeURIComponent(runId)}/cancel`, {
     method: "POST",
   });
+}
+
+export function getRelationships(
+  runId: string,
+  signal?: AbortSignal,
+): Promise<RelationshipListResponse> {
+  return requestJson<RelationshipListResponse>(
+    `/api/runs/${encodeURIComponent(runId)}/relationships`,
+    { signal },
+  );
+}
+
+export function getRelationshipDetail(
+  runId: string,
+  relationshipId: string,
+  signal?: AbortSignal,
+): Promise<RelationshipDetail> {
+  return requestJson<RelationshipDetail>(
+    `/api/runs/${encodeURIComponent(runId)}/relationships/${encodeURIComponent(relationshipId)}`,
+    { signal },
+  );
 }

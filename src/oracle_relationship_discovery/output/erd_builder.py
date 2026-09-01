@@ -81,6 +81,7 @@ def build_erd_model(
                 validation_status=evidence.status.value,
                 source_datatype=item.source.data_type,
                 target_datatype=item.target.data_type,
+                target_key_type=item.target.key_type.value,
                 cardinality_confidence=item.cardinality_confidence,
                 cardinality_explanation=item.cardinality_explanation,
                 name_score=score.name,

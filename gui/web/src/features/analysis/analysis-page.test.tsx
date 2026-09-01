@@ -56,6 +56,24 @@ function installRunApi() {
     http.post("/api/runs/:runId/cancel", ({ params }) =>
       HttpResponse.json({ run_id: params.runId, status: "CANCEL_REQUESTED" }),
     ),
+    http.get("/api/runs/:runId/relationships", ({ params }) =>
+      HttpResponse.json({
+        run_id: params.runId,
+        summary: {
+          schemas_analyzed: 2,
+          tables: 19,
+          columns: 123,
+          candidates_generated: 287,
+          candidates_validated: 84,
+          candidates_skipped: 4,
+          relationships_in_report: 32,
+          run_mode: "sampled",
+          elapsed_seconds: 12.5,
+        },
+        total: 0,
+        relationships: [],
+      }),
+    ),
   );
 }
 
@@ -150,7 +168,7 @@ describe("analysis configuration and run workflow", () => {
     expect(await screen.findByRole("button", { name: "Cancellation requested" })).toBeDisabled();
   });
 
-  it("shows completed summary and exposes only the Phase 4 navigation", async () => {
+  it("shows completed summary and opens the relationship explorer", async () => {
     const user = userEvent.setup();
     renderAnalysis();
     const source = await startRun(user);
@@ -185,7 +203,10 @@ describe("analysis configuration and run workflow", () => {
     expect(screen.getByText("32")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "View Results" }));
     expect(
-      await screen.findByRole("heading", { name: "Relationship results belong to Phase 4" }),
+      await screen.findByRole("heading", { name: "Relationship Explorer" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "No relationships in this run" }),
     ).toBeInTheDocument();
   });
 

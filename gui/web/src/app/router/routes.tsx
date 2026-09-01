@@ -4,7 +4,7 @@ import { AnalysisPage } from "../../features/analysis/analysis-page";
 import { ConnectionWorkspace } from "../../features/connection/connection-workspace";
 import { AppShell } from "../layout/app-shell";
 import { NotFoundPage } from "./not-found-page";
-import { ResultsPlaceholderPage } from "./results-placeholder-page";
+import { ResultsPage } from "../../features/results/results-page";
 
 export const appRoutes: RouteObject[] = [
   {
@@ -13,7 +13,7 @@ export const appRoutes: RouteObject[] = [
     children: [
       { index: true, element: <ConnectionWorkspace /> },
       { path: "analysis", element: <AnalysisPage /> },
-      { path: "results", element: <ResultsPlaceholderPage /> },
+      { path: "results", element: <ResultsPage /> },
       { path: "*", element: <NotFoundPage /> },
     ],
   },
