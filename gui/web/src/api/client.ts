@@ -1,5 +1,5 @@
 import type { components } from "./schema";
-import { toApiRequestError } from "./errors";
+import { ApiRequestError, toApiRequestError } from "./errors";
 
 export type HealthResponse = components["schemas"]["HealthResponse"];
 export type ConnectionCreateRequest = components["schemas"]["ConnectionCreateRequest"];
@@ -19,6 +19,8 @@ export type RelationshipDetail = components["schemas"]["RelationshipDetail"];
 export type ErdGraphResponse = components["schemas"]["ErdGraphResponse"];
 export type ErdGraphTable = components["schemas"]["ErdGraphTable"];
 export type ErdGraphColumn = components["schemas"]["ErdGraphColumn"];
+export type ArtifactListResponse = components["schemas"]["ArtifactListResponse"];
+export type ArtifactMetadata = components["schemas"]["ArtifactMetadata"];
 
 async function requestJson<T>(input: string, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {
@@ -106,4 +108,42 @@ export function getRelationshipDetail(
 
 export function getErdGraph(runId: string, signal?: AbortSignal): Promise<ErdGraphResponse> {
   return requestJson<ErdGraphResponse>(`/api/runs/${encodeURIComponent(runId)}/erd`, { signal });
+}
+
+export function getArtifacts(runId: string, signal?: AbortSignal): Promise<ArtifactListResponse> {
+  return requestJson<ArtifactListResponse>(`/api/runs/${encodeURIComponent(runId)}/artifacts`, {
+    signal,
+  });
+}
+
+export function artifactUrl(runId: string, artifactId: string, download = false): string {
+  const base = `/api/runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(artifactId)}`;
+  return download ? `${base}?download=true` : base;
+}
+
+export async function getArtifactText(
+  runId: string,
+  artifactId: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  const response = await fetch(artifactUrl(runId, artifactId), {
+    headers: { Accept: "text/plain" },
+    signal,
+  });
+  if (!response.ok) throw await toApiRequestError(response);
+  const declaredSize = Number(response.headers.get("Content-Length") ?? 0);
+  if (declaredSize > 5_000_000)
+    throw new ApiRequestError(
+      `DBML is too large to preview; download it instead.`,
+      413,
+      `DBML_PREVIEW_TOO_LARGE`,
+    );
+  const text = await response.text();
+  if (text.length > 5_000_000)
+    throw new ApiRequestError(
+      `DBML is too large to preview; download it instead.`,
+      413,
+      `DBML_PREVIEW_TOO_LARGE`,
+    );
+  return text;
 }

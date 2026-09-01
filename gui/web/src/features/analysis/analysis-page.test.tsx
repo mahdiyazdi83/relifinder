@@ -29,6 +29,9 @@ class MockEventSource {
       new MessageEvent("progress", { data: JSON.stringify(payload) }),
     );
   }
+  fail() {
+    this.listeners.get("error")?.(new Event("error"));
+  }
 }
 
 function renderAnalysis() {
@@ -157,6 +160,73 @@ describe("analysis configuration and run workflow", () => {
     expect(screen.getByText("287 qualified candidates")).toBeInTheDocument();
   });
 
+  it("recovers run state after a temporary SSE disconnect without marking failure", async () => {
+    const user = userEvent.setup();
+    renderAnalysis();
+    const source = await startRun(user);
+    server.use(
+      http.get("/api/runs/:runId", () =>
+        HttpResponse.json({
+          ...event("SCORING", { sequence: 6, message: "Recovered current run state" }),
+          connection_id: connectionId,
+          selected_schemas: ["CORE", "APP"],
+        }),
+      ),
+    );
+
+    source.fail();
+
+    expect(await screen.findByText("Recovered current run state")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Analysis failed" })).not.toBeInTheDocument();
+    expect(source.close).toHaveBeenCalled();
+  });
+  it("offers a safe reconnect flow when backend restart loses runtime run state", async () => {
+    const user = userEvent.setup();
+    renderAnalysis();
+    const source = await startRun(user);
+    server.use(
+      http.get("/api/runs/:runId", () =>
+        HttpResponse.json(
+          { error: { code: "RUN_NOT_FOUND", message: "The analysis run was not found." } },
+          { status: 404 },
+        ),
+      ),
+    );
+
+    source.fail();
+
+    expect(await screen.findByText(/local runtime may have restarted/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Return to Connection" })).toHaveAttribute("href", "/");
+    expect(screen.getByText(/No second run was started/i)).toBeInTheDocument();
+  });
+  it("bounds SSE reconnect attempts", async () => {
+    const user = userEvent.setup();
+    renderAnalysis();
+    const initial = await startRun(user);
+    server.use(
+      http.get("/api/runs/:runId", () =>
+        HttpResponse.json({
+          ...event("SCORING"),
+          connection_id: connectionId,
+          selected_schemas: ["CORE", "APP"],
+        }),
+      ),
+    );
+    vi.useFakeTimers();
+    try {
+      initial.fail();
+      await vi.advanceTimersByTimeAsync(1000);
+      MockEventSource.instances[1]!.fail();
+      await vi.advanceTimersByTimeAsync(2000);
+      MockEventSource.instances[2]!.fail();
+      await vi.advanceTimersByTimeAsync(3000);
+      MockEventSource.instances[3]!.fail();
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(MockEventSource.instances).toHaveLength(4);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
   it("requests cooperative cancellation", async () => {
     const user = userEvent.setup();
     renderAnalysis();

@@ -6,8 +6,13 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from gui.api.app import create_app
+from gui.api.schemas.runs import AnalysisConfiguration
 from gui.api.services.oracle_gateway import OracleDiscoveryResult
-from gui.api.services.runs import AnalysisExecutionError, AnalysisExecutor
+from gui.api.services.runs import (
+    AnalysisExecutionError,
+    AnalysisExecutor,
+    _core_config,
+)
 from oracle_relationship_discovery.analysis.service import (
     AnalysisPhase,
     AnalysisProgress,
@@ -118,6 +123,14 @@ def _wait_for(client: TestClient, run_id: str, state: str, timeout: float = 2) -
             return body
         time.sleep(0.01)
     raise AssertionError(f"run did not reach {state}")
+
+
+def test_gui_core_configuration_generates_authoritative_dbml(tmp_path: Path) -> None:
+    config = _core_config(("APP",), AnalysisConfiguration(), tmp_path)
+
+    assert config.erd.enabled is True
+    assert config.erd.scope == "full"
+    assert config.erd.min_confidence == 80
 
 
 def test_run_creation_progress_and_completed_summary() -> None:

@@ -281,9 +281,9 @@ The self-contained report works directly from disk and includes:
 
 ReliFinder discovers probable logical relationships; the ERD only visualizes those inferences. It never converts them into Oracle Foreign Key constraints. DBML is used because it is portable, reviewable text with native schema-qualified tables.
 
-### GUI workflow (Phases 1–5)
+### GUI workflow (Phases 1–6)
 
-The GUI is a **local-first developer workbench**. It covers secure Oracle connection, schema selection, analysis configuration, background execution, real progress, cooperative cancellation, completed-run summaries, and relationship exploration while keeping the Python inference core authoritative.
+The GUI is a **local-first developer workbench**. It covers secure Oracle connection, schema selection, analysis configuration, background execution, real progress, cooperative cancellation, completed-run summaries, relationship exploration, interactive ERD inspection, and safe completed-run exports while keeping the Python inference core authoritative.
 
 **Implemented:**
 
@@ -304,9 +304,13 @@ The GUI is a **local-first developer workbench**. It covers secure Oracle connec
 - an artifact-backed Interactive ERD powered by React Flow and deterministic left-to-right ELK layout;
 - compact column-anchored table nodes, honest known/unknown cardinality edges, schema/confidence/validation/cross-schema filtering, and one-hop table focus;
 - manual in-session node movement, explicit Auto Layout, fit/zoom/pan, a compact minimap for larger graphs, and shared table/relationship inspectors;
-- large-table truncation that always keeps key/connected columns plus the first 8 remaining columns, with local expand/collapse.
+- large-table truncation that always keeps key/connected columns plus the first 8 remaining columns, with local expand/collapse;
+- a run-scoped artifact manifest and path-safe streaming endpoints for the exact core-generated CSV, HTML report, and DBML files;
+- read-only DBML code viewing with lightweight highlighting, explicit clipboard copy, direct download, scope/threshold metadata, and unknown-cardinality omission statistics;
+- local HTML report opening in a separate tab with restrictive response headers and no unsafe React HTML injection;
+- bounded SSE reconnect with immediate run-status recovery, while completed Results/ERD/Exports remain independent of an Oracle session.
 
-**Planned for later phases:** DBML viewing, downloads, review, persistence, and run history. The Interactive ERD remains an explorer: it does not edit schemas or relationships and does not add export functionality.
+**Still intentionally out of scope:** review persistence, run history, collaboration, and schema editing. The Interactive ERD and DBML viewer are read-only and never modify Oracle or regenerate an export from transient GUI filters.
 
 ### GUI architecture
 
@@ -324,7 +328,7 @@ CLI and GUI call the same core analysis pipeline. FastAPI owns only local sessio
 
 POST /api/connections creates a bounded, in-memory Oracle pool, verifies the account, and captures schema summaries. The supplied password is held only in a temporary application buffer and cleared immediately after pool creation; it is never returned, logged, written to files, or stored in browser state. The opaque runtime session owns the pool and metadata snapshot until disconnect, idle expiry, eviction, or API shutdown. Active analysis leases prevent expiry/close while a run is using the resource.
 
-Runs execute in a local background thread and do not keep the creation request open. Progress events are compact aggregate metadata only and never contain sampled values. Cancellation stops new validation scheduling and is observed between bounded operations; an Oracle call already in progress may finish or reach its configured timeout first. The completed Results URL carries the opaque run ID and optional relationship ID so refresh and deep-link navigation work while the local API process is alive. Run records and parsed-result caches remain intentionally in memory and disappear on API shutdown.
+Runs execute in a local background thread and do not keep the creation request open. Progress events are compact aggregate metadata only and never contain sampled values. Cancellation stops new validation scheduling and is observed between bounded operations; an Oracle call already in progress may finish or reach its configured timeout first. The completed Results URL carries the opaque run ID and optional relationship ID so refresh and deep-link navigation work while the local API process is alive. Run records and parsed-result caches remain intentionally in memory and disappear on API shutdown. A completed run can be inspected and downloaded after its Oracle session expires because all Results, ERD, and Export endpoints read only that run's completed artifacts. The browser cannot submit filesystem paths; artifact IDs resolve through a fixed run-owned manifest.
 
 System classification uses `ALL_USERS.ORACLE_MAINTAINED` when Oracle provides it. On older versions, only the conservative `SYS` and `SYSTEM` fallback is classified as system. The UI hides classified system schemas by default but provides an explicit toggle; no application-schema blacklist is used.
 
@@ -371,7 +375,9 @@ If the Playwright CDN is unavailable but system Chrome is installed, set `PLAYWR
 - Credentials are never stored by ReliFinder in browser persistence, files, URLs, logs, API responses, or `VITE_*` variables.
 - The password field uses `autocomplete="current-password"`: standard browser password managers are not deliberately disabled, but their behavior is controlled by the browser rather than ReliFinder.
 - Frontend-visible Oracle failures are mapped to safe categories and contain no raw descriptors, tracebacks, credentials, or filesystem paths.
-- Theme preference is the only browser-persisted application value.
+- Theme preference is the only browser-persisted application value.- Only CSV, HTML, and DBML are exposed in the primary Export UI; machine-readable metadata artifacts remain internal.
+- Generated HTML is served only from the completed-run allowlist with `nosniff`, `no-store`, and a restrictive Content Security Policy.
+- dbdiagram integration is explicit and local-first: ReliFinder provides separate Copy DBML and Open dbdiagram actions and never uploads schema metadata automatically.
 - ReliFinder itself executes SELECT statements only. This does **not** prove that the supplied Oracle account lacks write privileges.
 
 Actual Oracle connection behavior requires integration testing against a real Oracle instance.
@@ -602,7 +608,7 @@ python -m compileall -q src gui/api
 
 Unit tests cover name normalization, datatype compatibility, generic-ID protection, candidate generation, score reliability, confidence labels, cardinality, composite-key safety, report privacy, run isolation, logging, and the SELECT-only SQL guard.
 
-GUI tests replace the Oracle gateway and analysis-executor boundaries and never require a database. They cover run state transitions, progress serialization, cancellation, completed/failed states, safe artifact-backed relationship/ERD APIs, deterministic IDs, filtering, sorting, column-anchored graph adaptation, deterministic ELK layout, one-hop focus, lazy evidence inspection, Chrome stress rendering, and the mocked browser workflow. They do not claim that real Oracle queries have been verified. Integration testing is required against each target Oracle version, driver mode, network configuration, and workload profile.
+GUI tests replace the Oracle gateway and analysis-executor boundaries and never require a database. They cover run state transitions, progress serialization, cancellation, completed/failed states, safe artifact-backed relationship/ERD/export APIs, traversal and wrong-run rejection, exact file responses, deterministic IDs, filtering, sorting, column-anchored graph adaptation, deterministic ELK layout, one-hop focus, lazy evidence inspection, Chrome stress rendering, and the mocked browser workflow. They do not claim that real Oracle queries have been verified. Integration testing is required against each target Oracle version, driver mode, network configuration, and workload profile.
 
 ## Known limitations
 
@@ -612,7 +618,7 @@ GUI tests replace the Oracle gateway and analysis-executor boundaries and never 
 - Only conventional uppercase-compatible Oracle identifiers are supported.
 - Synonyms, views, and partition-specific strategies are not analyzed yet.
 - Existing Foreign Keys are not emitted as discovered logical relationships in this version.
-- DBML viewing, exports UI, review persistence, and run history are deferred to later GUI phases.
+- Human review persistence and run history are not implemented; completed runs exist only in the current backend process even though core output directories remain on disk.
 - Connection sessions and run state are in memory, expire or disappear with API restart, and the frontend does not persist run IDs.
 - Cooperative cancellation cannot force-kill an in-flight Oracle call; it takes effect at the next safe boundary or configured query timeout.
 

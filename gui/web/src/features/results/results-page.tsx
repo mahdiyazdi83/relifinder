@@ -1,4 +1,4 @@
-import { ArrowLeft, DatabaseZap, Network } from "lucide-react";
+import { ArrowLeft, DatabaseZap, Download, Network } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
@@ -93,6 +93,12 @@ export function ResultsPage() {
         >
           <Network aria-hidden="true" className="size-3.5" /> Open ERD
         </Link>
+        <Link
+          className="inline-flex h-8 items-center gap-2 border border-border px-3 text-xs font-medium text-text-muted hover:border-accent hover:text-text"
+          to={`/exports?run=${encodeURIComponent(runId)}`}
+        >
+          <Download aria-hidden="true" className="size-3.5" /> Exports
+        </Link>{" "}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[11px] text-text-muted">
           <span>{data.summary.schemas_analyzed} schemas</span>
           <span>{data.summary.tables.toLocaleString()} tables</span>

@@ -1,6 +1,6 @@
 import "@xyflow/react/dist/style.css";
 
-import { ArrowLeft, Network } from "lucide-react";
+import { ArrowLeft, Code2, Network } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
@@ -106,7 +106,13 @@ export function ErdPage() {
             <Network aria-hidden="true" className="size-5 text-accent" /> Interactive ERD
           </h1>
         </div>
-        <p className="ml-auto max-w-xl text-right text-xs leading-5 text-text-muted">
+        <Link
+          className="ml-auto inline-flex h-8 items-center gap-2 border border-accent px-3 text-xs text-accent hover:bg-accent/10"
+          to={`/exports?run=${encodeURIComponent(runId)}`}
+        >
+          <Code2 aria-hidden="true" className="size-3.5" /> DBML & Exports
+        </Link>{" "}
+        <p className="max-w-xl text-right text-xs leading-5 text-text-muted">
           Artifact-backed visualization · zero additional Oracle queries · internal unknown
           cardinalities remain visible
         </p>

@@ -147,6 +147,8 @@ class CompletedRun:
     summary: RunSummary
     run_directory: Path
     min_report_confidence: float
+    erd_min_confidence: float
+    erd_scope: str
 
 
 @dataclass(slots=True)
@@ -270,6 +272,8 @@ class RunService:
                 summary=record.latest.summary,
                 run_directory=record.completed_directory,
                 min_report_confidence=record.configuration.min_report_confidence,
+                erd_min_confidence=record.configuration.erd_min_confidence,
+                erd_scope=record.configuration.erd_scope,
             )
 
     def cancel(self, run_id: str) -> RunCancelResponse:
@@ -485,7 +489,7 @@ def _core_config(
         ),
         output=OutputConfig(directory=output_root),
         erd=ErdConfig(
-            enabled=False,
+            enabled=True,
             min_confidence=values.erd_min_confidence,
             scope=values.erd_scope,
             exclude_generic=values.erd_exclude_generic,

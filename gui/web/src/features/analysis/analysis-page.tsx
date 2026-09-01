@@ -80,7 +80,7 @@ export function AnalysisPage() {
     }
   }
 
-  const run = runId ? statusQuery.data : null;
+  const run = runId && !statusQuery.isError ? statusQuery.data : null;
 
   return (
     <section className="mx-auto max-w-4xl px-5 py-6 lg:px-8" aria-labelledby="analysis-title">
@@ -144,7 +144,16 @@ export function AnalysisPage() {
             className="border-l-2 border-danger bg-danger/8 px-4 py-3 text-sm text-danger"
             role="alert"
           >
-            {toDisplayMessage(statusQuery.error)}
+            <p>{toDisplayMessage(statusQuery.error)}</p>
+            <p className="mt-1 text-text-muted">
+              The local runtime may have restarted. No second run was started.
+            </p>
+            <Link
+              className="mt-3 inline-flex items-center gap-2 text-accent hover:underline"
+              to="/"
+            >
+              <ArrowLeft aria-hidden="true" className="size-4" /> Return to Connection
+            </Link>
           </div>
         ) : (
           <p className="text-sm text-text-muted" role="status">

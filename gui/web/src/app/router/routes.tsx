@@ -21,6 +21,13 @@ export const appRoutes: RouteObject[] = [
           return { Component: ErdPage };
         },
       },
+      {
+        path: "exports",
+        lazy: async () => {
+          const { ExportsPage } = await import("../../features/exports/exports-page");
+          return { Component: ExportsPage };
+        },
+      },
       { path: "*", element: <NotFoundPage /> },
     ],
   },
