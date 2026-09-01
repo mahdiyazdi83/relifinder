@@ -14,6 +14,13 @@ export const appRoutes: RouteObject[] = [
       { index: true, element: <ConnectionWorkspace /> },
       { path: "analysis", element: <AnalysisPage /> },
       { path: "results", element: <ResultsPage /> },
+      {
+        path: "erd",
+        lazy: async () => {
+          const { ErdPage } = await import("../../features/erd/erd-page");
+          return { Component: ErdPage };
+        },
+      },
       { path: "*", element: <NotFoundPage /> },
     ],
   },

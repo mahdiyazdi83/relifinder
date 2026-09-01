@@ -123,6 +123,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/runs/{run_id}/erd": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Erd Graph */
+        get: operations["erd_graph_api_runs__run_id__erd_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/runs/{run_id}/events": {
         parameters: {
             query?: never;
@@ -317,6 +334,51 @@ export interface components {
              * @constant
              */
             status: "connected";
+        };
+        /** ErdGraphColumn */
+        ErdGraphColumn: {
+            /** Composite Key */
+            composite_key: boolean;
+            /** Datatype */
+            datatype: string;
+            /** Name */
+            name: string;
+            /** Nullable */
+            nullable: boolean;
+            /** Position */
+            position: number;
+            /** Primary Key */
+            primary_key: boolean;
+            /** Relationship Connected */
+            relationship_connected: boolean;
+            /** Unique Key */
+            unique_key: boolean;
+        };
+        /** ErdGraphResponse */
+        ErdGraphResponse: {
+            /** Default Min Confidence */
+            default_min_confidence: number;
+            /** Relationships */
+            relationships: components["schemas"]["RelationshipListItem"][];
+            /** Run Id */
+            run_id: string;
+            /** Schemas */
+            schemas: string[];
+            /** Tables */
+            tables: components["schemas"]["ErdGraphTable"][];
+        };
+        /** ErdGraphTable */
+        ErdGraphTable: {
+            /** Columns */
+            columns: components["schemas"]["ErdGraphColumn"][];
+            /** Estimated Rows */
+            estimated_rows?: number | null;
+            /** Id */
+            id: string;
+            /** Schema Name */
+            schema_name: string;
+            /** Table Name */
+            table_name: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -919,6 +981,55 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    erd_graph_api_runs__run_id__erd_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErdGraphResponse"];
                 };
             };
             /** @description Not Found */

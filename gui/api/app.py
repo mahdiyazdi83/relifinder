@@ -5,6 +5,7 @@ from fastapi import FastAPI
 
 from gui.api.errors import install_error_handlers
 from gui.api.routes.connections import router as connections_router
+from gui.api.routes.erd import router as erd_router
 from gui.api.routes.health import router as health_router
 from gui.api.routes.relationships import router as relationships_router
 from gui.api.routes.runs import router as runs_router
@@ -39,7 +40,7 @@ def create_app(
     app = FastAPI(
         title="ReliFinder GUI API",
         description="Local orchestration boundary for the ReliFinder GUI.",
-        version="0.4.0",
+        version="0.5.0",
         lifespan=lifespan,
     )
     app.state.connection_service = connection_service
@@ -47,6 +48,7 @@ def create_app(
     app.state.results_service = results_service
     install_error_handlers(app)
     app.include_router(health_router, prefix="/api")
+    app.include_router(erd_router, prefix="/api")
     app.include_router(connections_router, prefix="/api")
     app.include_router(runs_router, prefix="/api")
     app.include_router(relationships_router, prefix="/api")

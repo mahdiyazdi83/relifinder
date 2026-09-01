@@ -158,6 +158,44 @@ test("connects, configures Balanced, runs analysis, and reaches results", async 
     });
   });
 
+  await page.route("**/api/runs/*/erd", async (route) => {
+    const column = (name: string, position: number, primaryKey = false) => ({
+      name,
+      datatype: "NUMBER",
+      nullable: !primaryKey,
+      position,
+      primary_key: primaryKey,
+      unique_key: false,
+      composite_key: false,
+      relationship_connected: name === "CUSTOMER_ID" || name === "ID",
+    });
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        run_id: runId,
+        default_min_confidence: 60,
+        schemas: ["CORE"],
+        tables: [
+          {
+            id: "d".repeat(64),
+            schema_name: "CORE",
+            table_name: "ORDERS",
+            estimated_rows: 2000,
+            columns: [column("ID", 1, true), column("CUSTOMER_ID", 2)],
+          },
+          {
+            id: "e".repeat(64),
+            schema_name: "CORE",
+            table_name: "CUSTOMERS",
+            estimated_rows: 400,
+            columns: [column("ID", 1, true), column("NAME", 2)],
+          },
+        ],
+        relationships: [relationship],
+      }),
+    });
+  });
+
   await page.goto("/");
   await page.getByLabel("Host").fill("db.example.invalid");
   await page.getByLabel("Service name").fill("FAKE_SERVICE");
@@ -189,4 +227,36 @@ test("connects, configures Balanced, runs analysis, and reaches results", async 
   await expect(page.getByRole("complementary", { name: "Relationship inspector" })).toBeVisible();
   await page.getByRole("button", { name: "Close inspector" }).click();
   await expect(page.getByText("Select a relationship")).toBeVisible();
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.getByRole("link", { name: "Open ERD" }).click();
+  await expect(page.getByRole("heading", { name: "Interactive ERD" })).toBeVisible();
+  await expect(page.getByText("2 tables · 1 relationships")).toBeVisible();
+
+  await page.getByLabel("ERD minimum confidence").fill("97");
+  await expect(
+    page.getByRole("heading", { name: "ERD has no visible relationships" }),
+  ).toBeVisible();
+  await page.getByLabel("ERD minimum confidence").fill("60");
+  await expect(page.getByText("2 tables · 1 relationships")).toBeVisible();
+
+  await page.getByText(/Schemas 1\/1/).click();
+  await page.getByRole("checkbox", { name: "CORE" }).uncheck();
+  await expect(
+    page.getByRole("heading", { name: "ERD has no visible relationships" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "All schemas" }).click();
+  await expect(page.getByText("2 tables · 1 relationships")).toBeVisible();
+
+  await page.getByTestId(`erd-edge-${relationshipId}`).click({ force: true });
+  await expect(page.getByRole("heading", { name: "Score evidence" })).toBeVisible();
+  await expect(page.getByText("Strong bounded evidence supports this relationship.")).toBeVisible();
+  await page.getByRole("button", { name: "Close inspector" }).click();
+
+  await page.getByText("ORDERS", { exact: true }).click();
+  await expect(page.getByRole("complementary", { name: "Table inspector" })).toBeVisible();
+  await page.getByRole("button", { name: "Focus table (1 hop)" }).click();
+  await expect(page.getByRole("button", { name: "Exit Focus" })).toBeVisible();
+  await page.getByRole("button", { name: "Exit Focus" }).click();
+  await expect(page.getByText("2 tables · 1 relationships")).toBeVisible();
 });

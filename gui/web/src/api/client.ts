@@ -16,6 +16,9 @@ export type RunCancelResponse = components["schemas"]["RunCancelResponse"];
 export type RelationshipListResponse = components["schemas"]["RelationshipListResponse"];
 export type RelationshipListItem = components["schemas"]["RelationshipListItem"];
 export type RelationshipDetail = components["schemas"]["RelationshipDetail"];
+export type ErdGraphResponse = components["schemas"]["ErdGraphResponse"];
+export type ErdGraphTable = components["schemas"]["ErdGraphTable"];
+export type ErdGraphColumn = components["schemas"]["ErdGraphColumn"];
 
 async function requestJson<T>(input: string, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {
@@ -99,4 +102,8 @@ export function getRelationshipDetail(
     `/api/runs/${encodeURIComponent(runId)}/relationships/${encodeURIComponent(relationshipId)}`,
     { signal },
   );
+}
+
+export function getErdGraph(runId: string, signal?: AbortSignal): Promise<ErdGraphResponse> {
+  return requestJson<ErdGraphResponse>(`/api/runs/${encodeURIComponent(runId)}/erd`, { signal });
 }

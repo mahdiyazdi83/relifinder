@@ -1,4 +1,4 @@
-import { ArrowLeft, DatabaseZap } from "lucide-react";
+import { ArrowLeft, DatabaseZap, Network } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
@@ -87,7 +87,13 @@ export function ResultsPage() {
             Relationship Explorer
           </h1>
         </div>
-        <div className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[11px] text-text-muted">
+        <Link
+          className="ml-auto inline-flex h-8 items-center gap-2 border border-accent px-3 text-xs font-medium text-accent hover:bg-accent/10"
+          to={`/erd?run=${encodeURIComponent(runId)}`}
+        >
+          <Network aria-hidden="true" className="size-3.5" /> Open ERD
+        </Link>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[11px] text-text-muted">
           <span>{data.summary.schemas_analyzed} schemas</span>
           <span>{data.summary.tables.toLocaleString()} tables</span>
           <span>{data.summary.columns.toLocaleString()} columns</span>

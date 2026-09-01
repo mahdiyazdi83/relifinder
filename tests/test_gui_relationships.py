@@ -8,9 +8,15 @@ from gui.api.app import create_app
 from gui.api.services.oracle_gateway import OracleDiscoveryResult
 from gui.api.services.runs import AnalysisExecutor
 from oracle_relationship_discovery.analysis.service import AnalysisResult
-from oracle_relationship_discovery.models import AnalysisStats, SchemaSummary
+from oracle_relationship_discovery.models import (
+    AnalysisStats,
+    ColumnMetadata,
+    SchemaSummary,
+    TableMetadata,
+)
 from oracle_relationship_discovery.output.analysis_results import write_analysis_results
 from oracle_relationship_discovery.output.erd_models import ErdRelationship
+from oracle_relationship_discovery.output.schema_metadata import write_schema_metadata
 
 CONNECTION_PAYLOAD = {
     "host": "db.example.invalid",
@@ -99,6 +105,40 @@ def relationships() -> tuple[ErdRelationship, ...]:
     )
 
 
+def metadata_tables() -> list[TableMetadata]:
+    definitions = (
+        ("APP", "REQUEST", "PARTY_ID", False, False, 1200),
+        ("CORE", "PARTY", "ID", True, False, 400),
+        ("APP", "ORDER_LINE", "ORDER_ID", False, False, 8000),
+        ("APP", "ORDERS", "ID", False, True, 2000),
+        ("APP", "AUDIT", "TYPE_ID", False, False, 50000),
+        ("CORE", "TYPE", "ID", True, False, 20),
+    )
+    tables: list[TableMetadata] = []
+    for schema, table_name, column_name, primary, unique, estimated_rows in definitions:
+        table = TableMetadata(schema=schema, name=table_name, estimated_rows=estimated_rows)
+        table.columns = [
+            ColumnMetadata(
+                schema=schema,
+                table=table_name,
+                name=column_name,
+                data_type="NUMBER",
+                position=1,
+                pk_constraints=("PK_TEST",) if primary else (),
+                unique_constraints=("UK_TEST",) if unique else (),
+            ),
+            ColumnMetadata(
+                schema=schema,
+                table=table_name,
+                name="DESCRIPTION",
+                data_type="VARCHAR2",
+                position=2,
+            ),
+        ]
+        tables.append(table)
+    return tables
+
+
 class ArtifactExecutor(AnalysisExecutor):
     def __init__(self, root: Path, mode: str = "valid") -> None:
         self.root = root
@@ -117,6 +157,12 @@ class ArtifactExecutor(AnalysisExecutor):
             )
         elif self.mode == "corrupt":
             artifact.write_text('{"relationships": [', encoding="utf-8")
+        if self.mode != "missing-metadata":
+            write_schema_metadata(
+                run_directory / "schema-metadata.json",
+                metadata_tables(),
+                "2026-09-01T10:00:00+03:30",
+            )
         return AnalysisResult(
             AnalysisStats(2, 8, 42, 3, 1, 0),
             relationships_in_report=2,
@@ -296,3 +342,48 @@ def test_parsed_results_cache_avoids_reparsing_for_detail(tmp_path: Path) -> Non
         detail = client.get(f"/api/runs/{run_id}/relationships/{listing['relationships'][0]['id']}")
 
     assert detail.status_code == 200
+
+
+def test_erd_graph_uses_safe_metadata_and_includes_below_report_threshold(
+    tmp_path: Path,
+) -> None:
+    with TestClient(
+        create_app(gateway=FakeGateway(), analysis_executor=ArtifactExecutor(tmp_path))
+    ) as client:
+        run_id = connect_and_run(client)
+        graph_response = client.get(f"/api/runs/{run_id}/erd")
+        graph = graph_response.json()
+        low = next(item for item in graph["relationships"] if item["confidence_score"] == 30)
+        detail_response = client.get(f"/api/runs/{run_id}/relationships/{low['id']}")
+
+    assert graph_response.status_code == 200
+    assert graph["default_min_confidence"] == 40
+    assert graph["schemas"] == ["APP", "CORE"]
+    assert len(graph["tables"]) == 6
+    assert len(graph["relationships"]) == 3
+    party = next(
+        table
+        for table in graph["tables"]
+        if (table["schema_name"], table["table_name"]) == ("CORE", "PARTY")
+    )
+    assert party["estimated_rows"] == 400
+    assert party["columns"][0]["primary_key"] is True
+    assert party["columns"][0]["relationship_connected"] is True
+    assert party["columns"][1]["relationship_connected"] is False
+    assert detail_response.status_code == 200
+
+
+def test_erd_graph_missing_metadata_error_is_sanitized(tmp_path: Path) -> None:
+    with TestClient(
+        create_app(
+            gateway=FakeGateway(),
+            analysis_executor=ArtifactExecutor(tmp_path, "missing-metadata"),
+        )
+    ) as client:
+        run_id = connect_and_run(client)
+        response = client.get(f"/api/runs/{run_id}/erd")
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "RESULTS_ARTIFACT_UNAVAILABLE"
+    assert str(tmp_path) not in response.text
+    assert CONNECTION_PAYLOAD["password"] not in response.text

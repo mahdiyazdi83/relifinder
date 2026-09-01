@@ -281,7 +281,7 @@ The self-contained report works directly from disk and includes:
 
 ReliFinder discovers probable logical relationships; the ERD only visualizes those inferences. It never converts them into Oracle Foreign Key constraints. DBML is used because it is portable, reviewable text with native schema-qualified tables.
 
-### GUI workflow (Phases 1–4)
+### GUI workflow (Phases 1–5)
 
 The GUI is a **local-first developer workbench**. It covers secure Oracle connection, schema selection, analysis configuration, background execution, real progress, cooperative cancellation, completed-run summaries, and relationship exploration while keeping the Python inference core authoritative.
 
@@ -300,14 +300,18 @@ The GUI is a **local-first developer workbench**. It covers secure Oracle connec
 - deterministic directional relationship IDs derived with SHA-256 from both fully qualified endpoints;
 - a bounded in-memory parsed-results cache and lazy detail loading for responsive low-thousands result sets;
 - combined search and technical filters, deterministic sorting, 100-row client pagination, and accessible keyboard-selectable rows;
-- an evidence inspector for score components, bounded sampling aggregates, cardinality confidence, and the core-authored explanation.
+- an evidence inspector for score components, bounded sampling aggregates, cardinality confidence, and the core-authored explanation;
+- an artifact-backed Interactive ERD powered by React Flow and deterministic left-to-right ELK layout;
+- compact column-anchored table nodes, honest known/unknown cardinality edges, schema/confidence/validation/cross-schema filtering, and one-hop table focus;
+- manual in-session node movement, explicit Auto Layout, fit/zoom/pan, a compact minimap for larger graphs, and shared table/relationship inspectors;
+- large-table truncation that always keeps key/connected columns plus the first 8 remaining columns, with local expand/collapse.
 
-**Planned for later phases:** ERD rendering, DBML viewing, downloads, review, persistence, and run history. Phase 4 intentionally does not add graph libraries, manual editing, or a GUI database.
+**Planned for later phases:** DBML viewing, downloads, review, persistence, and run history. The Interactive ERD remains an explorer: it does not edit schemas or relationships and does not add export functionality.
 
 ### GUI architecture
 
 ~~~text
-React + TypeScript (gui/web)
+React + TypeScript + React Flow + ELK.js (gui/web)
         ↓ relative /api + SSE
 FastAPI local adapter and in-memory run manager (gui/api)
         ↓ reusable analysis service + cooperative token
@@ -371,6 +375,16 @@ If the Playwright CDN is unavailable but system Chrome is installed, set `PLAYWR
 - ReliFinder itself executes SELECT statements only. This does **not** prove that the supplied Oracle account lacks write privileges.
 
 Actual Oracle connection behavior requires integration testing against a real Oracle instance.
+
+Phase 5 local synthetic performance checks (Chrome and the same production graph adapter) measured:
+
+| Tables | Relationships | ELK layout | Chrome usable |
+|---:|---:|---:|---:|
+| 25 | 50 | 43.4 ms | 587.9–870.2 ms |
+| 75 | 300 | 85.4 ms | 850.8–893.1 ms |
+| 150 | 600 | 86.6 ms | 1016.6–1140.5 ms |
+
+These are local development measurements, not universal guarantees. At 600 edges the graph is intentionally dense; filtering and one-hop focus remain the practical navigation tools. The observed layout cost did not justify adding a Web Worker in Phase 5.
 
 ## Architecture and privacy
 
@@ -572,6 +586,7 @@ The analysis package is pure Python logic and has no Oracle dependency. Database
 | Hatchling | Standards-based package builds |
 | FastAPI 0.141 / Pydantic 2.13 | Local GUI adapter and contracts |
 | React 19 / React Router 7 | GUI shell and routing |
+| React Flow 12 / ELK.js 0.12 | Interactive ERD rendering and deterministic client-side layout |
 | TanStack Query 5 / Zod 4 | Server state and runtime validation |
 | Vite 8 / TypeScript 5.9 / Tailwind CSS 4 | Strict frontend toolchain and design tokens |
 | Vitest 4 / Testing Library / Playwright 1.62 | Frontend unit and smoke testing |
@@ -587,7 +602,7 @@ python -m compileall -q src gui/api
 
 Unit tests cover name normalization, datatype compatibility, generic-ID protection, candidate generation, score reliability, confidence labels, cardinality, composite-key safety, report privacy, run isolation, logging, and the SELECT-only SQL guard.
 
-GUI tests replace the Oracle gateway and analysis-executor boundaries and never require a database. They cover run state transitions, progress serialization, cancellation, completed/failed states, safe artifact-backed relationship APIs, deterministic IDs, filtering, sorting, lazy evidence inspection, and the mocked browser workflow. They do not claim that real Oracle queries have been verified. Integration testing is required against each target Oracle version, driver mode, network configuration, and workload profile.
+GUI tests replace the Oracle gateway and analysis-executor boundaries and never require a database. They cover run state transitions, progress serialization, cancellation, completed/failed states, safe artifact-backed relationship/ERD APIs, deterministic IDs, filtering, sorting, column-anchored graph adaptation, deterministic ELK layout, one-hop focus, lazy evidence inspection, Chrome stress rendering, and the mocked browser workflow. They do not claim that real Oracle queries have been verified. Integration testing is required against each target Oracle version, driver mode, network configuration, and workload profile.
 
 ## Known limitations
 
@@ -597,7 +612,7 @@ GUI tests replace the Oracle gateway and analysis-executor boundaries and never 
 - Only conventional uppercase-compatible Oracle identifiers are supported.
 - Synonyms, views, and partition-specific strategies are not analyzed yet.
 - Existing Foreign Keys are not emitted as discovered logical relationships in this version.
-- ERD rendering, DBML viewing, exports UI, review persistence, and run history are deferred to later GUI phases.
+- DBML viewing, exports UI, review persistence, and run history are deferred to later GUI phases.
 - Connection sessions and run state are in memory, expire or disappear with API restart, and the frontend does not persist run IDs.
 - Cooperative cancellation cannot force-kill an in-flight Oracle call; it takes effect at the next safe boundary or configured query timeout.
 
