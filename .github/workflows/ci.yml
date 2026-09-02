@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python 3.11
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install project and test dependencies
+        run: python -m pip install -e ".[gui,dev]"
+      - name: Lint and compile
+        run: |
+          ruff check src tests scripts start.py
+          python -m compileall -q src scripts start.py
+      - name: Verify packaged GUI assets are current
+        run: python scripts/build_gui.py --check
+      - name: Run Python tests
+        run: pytest
+      - name: Build wheel
+        run: python -m pip wheel . --no-deps --wheel-dir dist
+
+  frontend:
+    name: Frontend and E2E
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/setup@v2
+        with:
+          version: 11.19.0
+          runtime: node@24
+          cache: true
+          cache-dependency-path: gui/web/pnpm-lock.yaml
+          package-json-file: gui/web/package.json
+          install: false
+      - name: Install locked frontend dependencies
+        working-directory: gui/web
+        run: pnpm install --frozen-lockfile
+      - name: Lint, typecheck, test, and build
+        working-directory: gui/web
+        run: |
+          pnpm lint
+          pnpm typecheck
+          pnpm test:run
+          pnpm build
+      - name: Install Playwright Chromium
+        working-directory: gui/web
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Run browser workflow tests
+        working-directory: gui/web
+        run: pnpm test:e2e

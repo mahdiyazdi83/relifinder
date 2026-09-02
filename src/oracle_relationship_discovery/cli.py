@@ -23,6 +23,13 @@ LOGGER = logging.getLogger(__name__)
 ERD_SCOPES = ("full", "schema", "cross-schema")
 
 
+def _port(value: str) -> int:
+    port = int(value)
+    if not 1 <= port <= 65535:
+        raise argparse.ArgumentTypeError("port must be between 1 and 65535")
+    return port
+
+
 def _add_erd_arguments(parser: argparse.ArgumentParser, *, analyze: bool) -> None:
     if analyze:
         parser.add_argument("--erd", action="store_true", help="Export an inferred DBML ERD")
@@ -113,6 +120,15 @@ def build_parser() -> argparse.ArgumentParser:
     offline.add_argument("--output-dir", type=Path, help="ERD destination directory")
     offline.add_argument("--verbose", action="store_true", help="Enable DEBUG logging")
     _add_erd_arguments(offline, analyze=False)
+
+    gui = subparsers.add_parser("gui", help="Launch the local ReliFinder web workbench")
+    gui.add_argument("--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1)")
+    gui.add_argument("--port", type=_port, default=8741, help="Bind port (default: 8741)")
+    gui.add_argument(
+        "--no-browser",
+        action="store_true",
+        help="Do not open the default browser automatically",
+    )
     return parser
 
 
@@ -305,6 +321,14 @@ def main(argv: list[str] | None = None) -> int:
             return run_analyze(args)
         if args.command == "export-erd":
             return run_export_erd(args)
+        if args.command == "gui":
+            from oracle_relationship_discovery.gui.launcher import launch_gui
+
+            return launch_gui(
+                host=args.host,
+                port=args.port,
+                open_browser=not args.no_browser,
+            )
     except (ValueError, OSError) as exc:
         message = f"error: {exc}"
         if logging.getLogger().handlers:

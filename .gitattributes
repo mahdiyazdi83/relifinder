@@ -1,0 +1,2 @@
+src/oracle_relationship_discovery/gui/static/assets/*.js -diff linguist-generated=true
+src/oracle_relationship_discovery/gui/static/assets/*.css -diff linguist-generated=true

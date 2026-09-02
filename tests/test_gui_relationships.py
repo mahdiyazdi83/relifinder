@@ -4,10 +4,10 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from gui.api.app import create_app
-from gui.api.services.oracle_gateway import OracleDiscoveryResult
-from gui.api.services.runs import AnalysisExecutor
 from oracle_relationship_discovery.analysis.service import AnalysisResult
+from oracle_relationship_discovery.gui.app import create_app
+from oracle_relationship_discovery.gui.services.oracle_gateway import OracleDiscoveryResult
+from oracle_relationship_discovery.gui.services.runs import AnalysisExecutor
 from oracle_relationship_discovery.models import (
     AnalysisStats,
     ColumnMetadata,

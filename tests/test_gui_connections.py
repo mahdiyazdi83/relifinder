@@ -2,9 +2,9 @@ import logging
 
 from fastapi.testclient import TestClient
 
-from gui.api.app import create_app
-from gui.api.services.connection_sessions import ConnectionSessionStore
-from gui.api.services.oracle_gateway import (
+from oracle_relationship_discovery.gui.app import create_app
+from oracle_relationship_discovery.gui.services.connection_sessions import ConnectionSessionStore
+from oracle_relationship_discovery.gui.services.oracle_gateway import (
     OracleDiscoveryResult,
     OracleGatewayError,
     _sanitized_connection_error,

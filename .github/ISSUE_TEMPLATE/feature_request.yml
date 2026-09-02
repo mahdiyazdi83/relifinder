@@ -1,0 +1,23 @@
+name: Feature request
+description: Suggest an improvement to ReliFinder.
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: Describe the use case without private database details.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+    validations:
+      required: true
+  - type: textarea
+    id: safety
+    attributes:
+      label: Safety and compatibility considerations
+      description: Note possible effects on read-only guarantees, sampling load, output privacy, or existing CLI behavior.

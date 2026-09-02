@@ -5,18 +5,18 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from gui.api.app import create_app
-from gui.api.schemas.runs import AnalysisConfiguration
-from gui.api.services.oracle_gateway import OracleDiscoveryResult
-from gui.api.services.runs import (
-    AnalysisExecutionError,
-    AnalysisExecutor,
-    _core_config,
-)
 from oracle_relationship_discovery.analysis.service import (
     AnalysisPhase,
     AnalysisProgress,
     AnalysisResult,
+)
+from oracle_relationship_discovery.gui.app import create_app
+from oracle_relationship_discovery.gui.schemas.runs import AnalysisConfiguration
+from oracle_relationship_discovery.gui.services.oracle_gateway import OracleDiscoveryResult
+from oracle_relationship_discovery.gui.services.runs import (
+    AnalysisExecutionError,
+    AnalysisExecutor,
+    _core_config,
 )
 from oracle_relationship_discovery.models import AnalysisStats, SchemaSummary
 

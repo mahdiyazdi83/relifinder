@@ -55,6 +55,7 @@ gui = [
 ]
 
 [project.scripts]
+relifinder = "oracle_relationship_discovery.cli:main"
 oracle-relationship-discovery = "oracle_relationship_discovery.cli:main"
 
 [tool.hatch.build.targets.wheel]

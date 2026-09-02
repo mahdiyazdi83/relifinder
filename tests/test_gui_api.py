@@ -1,7 +1,7 @@
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-from gui.api.app import app, create_app
+from oracle_relationship_discovery.gui.app import app, create_app
 
 
 def test_health_endpoint() -> None:

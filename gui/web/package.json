@@ -18,7 +18,7 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:e2e": "playwright test",
-    "generate:openapi": "cd ../.. && python -m gui.api.export_openapi gui/web/openapi.json",
+    "generate:openapi": "cd ../.. && python -m oracle_relationship_discovery.gui.export_openapi gui/web/openapi.json",
     "generate:api": "pnpm generate:openapi && openapi-typescript openapi.json -o src/api/schema.d.ts"
   },
   "dependencies": {

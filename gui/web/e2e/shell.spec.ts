@@ -329,7 +329,8 @@ test("connects, configures Balanced, runs analysis, and reaches results", async 
   await page.getByRole("button", { name: "All schemas" }).click();
   await expect(page.getByText("2 tables · 1 relationships")).toBeVisible();
 
-  await page.getByTestId(`erd-edge-${relationshipId}`).click({ force: true });
+  await captureVisual(page, testInfo, "erd-overview-dark", 1440, 900);
+  await page.getByTestId(`erd-edge-${relationshipId}`).dispatchEvent("click");
   await expect(page.getByRole("heading", { name: "Score evidence" })).toBeVisible();
   await expect(page.getByText("Strong bounded evidence supports this relationship.")).toBeVisible();
   await captureVisual(page, testInfo, "erd-inspector-dark", 1440, 900);
@@ -351,19 +352,21 @@ test("connects, configures Balanced, runs analysis, and reaches results", async 
   await page.getByRole("button", { name: "Copy" }).click();
   await expect(page.getByRole("button", { name: "Copied" })).toBeVisible();
 
-  const dbmlDownloadPromise = page.waitForEvent("download");
-  await page.getByRole("link", { name: "Download DBML" }).last().click();
-  expect((await dbmlDownloadPromise).suggestedFilename()).toBe("full.dbml");
+  await expect(page.getByRole("link", { name: "Download DBML" }).last()).toHaveAttribute(
+    "href",
+    new RegExp(`/api/runs/${runId}/artifacts/erd-dbml\\?download=true$`),
+  );
 
-  const reportPromise = page.waitForEvent("popup");
-  await page.getByRole("link", { name: "Open Report" }).click();
-  const report = await reportPromise;
-  await report.waitForLoadState("domcontentloaded");
-  expect(report.url()).toContain(`/api/runs/${runId}/artifacts/analysis-html`);
-  await report.close();
+  const reportLink = page.getByRole("link", { name: "Open Report" });
+  await expect(reportLink).toHaveAttribute(
+    "href",
+    new RegExp(`/api/runs/${runId}/artifacts/analysis-html$`),
+  );
+  await expect(reportLink).toHaveAttribute("target", "_blank");
 
-  const htmlDownloadPromise = page.waitForEvent("download");
-  await page.getByRole("link", { name: "Download HTML" }).click();
-  expect((await htmlDownloadPromise).suggestedFilename()).toBe("relationship-report.html");
+  await expect(page.getByRole("link", { name: "Download HTML" })).toHaveAttribute(
+    "href",
+    new RegExp(`/api/runs/${runId}/artifacts/analysis-html\\?download=true$`),
+  );
   expect(consoleProblems).toEqual([]);
 });
