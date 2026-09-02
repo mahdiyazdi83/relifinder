@@ -164,51 +164,52 @@ function ErdWorkspaceInner({
       />
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_22rem] max-xl:grid-cols-1">
         <div className="relative min-h-[34rem] bg-background" data-testid="erd-canvas">
+          <ErdNodeActionsProvider value={actions}>
+            <ReactFlow<ErdTableNode, ErdRelationshipEdge>
+              colorMode="system"
+              deleteKeyCode={null}
+              edges={edges}
+              edgeTypes={edgeTypes}
+              elementsSelectable
+              fitView={false}
+              minZoom={0.12}
+              nodeTypes={nodeTypes}
+              nodes={nodes}
+              nodesConnectable={false}
+              nodesDraggable
+              onEdgesChange={onEdgesChange}
+              onEdgeClick={onEdgeClick}
+              onNodesChange={onNodesChange}
+              onNodeClick={onNodeClick}
+              onlyRenderVisibleElements
+            >
+              <Background
+                color="var(--rf-border)"
+                gap={24}
+                size={1}
+                variant={BackgroundVariant.Dots}
+              />
+              <Controls
+                className="!overflow-hidden !rounded-none !border !border-border !bg-surface !shadow-none [&_button]:!border-border [&_button]:!bg-surface [&_button]:!fill-text-muted hover:[&_button]:!bg-surface-elevated"
+                showFitView={false}
+                showInteractive={false}
+              />
+              {nodes.length >= 20 ? (
+                <MiniMap
+                  className="!border !border-border !bg-surface"
+                  maskColor="color-mix(in srgb, var(--rf-background) 72%, transparent)"
+                  nodeColor="var(--rf-text-muted)"
+                  pannable
+                  zoomable
+                />
+              ) : null}
+            </ReactFlow>
+          </ErdNodeActionsProvider>
           {visualization.nodes.length === 0 ? (
-            <EmptyGraph message={emptyMessage} />
-          ) : (
-            <ErdNodeActionsProvider value={actions}>
-              <ReactFlow<ErdTableNode, ErdRelationshipEdge>
-                colorMode="system"
-                deleteKeyCode={null}
-                edges={edges}
-                edgeTypes={edgeTypes}
-                elementsSelectable
-                fitView={false}
-                minZoom={0.12}
-                nodeTypes={nodeTypes}
-                nodes={nodes}
-                nodesConnectable={false}
-                nodesDraggable
-                onEdgesChange={onEdgesChange}
-                onEdgeClick={onEdgeClick}
-                onNodesChange={onNodesChange}
-                onNodeClick={onNodeClick}
-                onlyRenderVisibleElements
-              >
-                <Background
-                  color="var(--rf-border)"
-                  gap={24}
-                  size={1}
-                  variant={BackgroundVariant.Dots}
-                />
-                <Controls
-                  className="!overflow-hidden !rounded-none !border !border-border !bg-surface !shadow-none [&_button]:!border-border [&_button]:!bg-surface [&_button]:!fill-text-muted hover:[&_button]:!bg-surface-elevated"
-                  showFitView={false}
-                  showInteractive={false}
-                />
-                {nodes.length >= 20 ? (
-                  <MiniMap
-                    className="!border !border-border !bg-surface"
-                    maskColor="color-mix(in srgb, var(--rf-background) 72%, transparent)"
-                    nodeColor="var(--rf-text-muted)"
-                    pannable
-                    zoomable
-                  />
-                ) : null}
-              </ReactFlow>
-            </ErdNodeActionsProvider>
-          )}
+            <div className="absolute inset-0 z-10 bg-background/92">
+              <EmptyGraph message={emptyMessage} />
+            </div>
+          ) : null}
           {focusTableId && !visualization.focusHasNeighbors && visualization.nodes.length > 0 ? (
             <div
               className="absolute bottom-3 left-1/2 z-20 -translate-x-1/2 border border-warning/50 bg-surface px-3 py-2 text-xs text-text-muted shadow"

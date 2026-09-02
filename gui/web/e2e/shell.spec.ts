@@ -1,9 +1,21 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page, type TestInfo } from "@playwright/test";
+
+async function captureVisual(
+  page: Page,
+  testInfo: TestInfo,
+  name: string,
+  width: number,
+  height: number,
+) {
+  if (!process.env.RELIFINDER_VISUAL_QA) return;
+  await page.setViewportSize({ width, height });
+  await page.screenshot({ path: testInfo.outputPath(`${name}-${width}.png`), fullPage: true });
+}
 
 test("connects, configures Balanced, runs analysis, and reaches results", async ({
   page,
   context,
-}) => {
+}, testInfo) => {
   const consoleProblems: string[] = [];
   page.on("console", (message) => {
     if (["warning", "error"].includes(message.type())) consoleProblems.push(message.text());
@@ -263,6 +275,7 @@ test("connects, configures Balanced, runs analysis, and reaches results", async 
   });
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.goto("/");
+  await captureVisual(page, testInfo, "connection-dark", 1366, 768);
   await page.getByLabel("Host").fill("db.example.invalid");
   await page.getByLabel("Service name").fill("FAKE_SERVICE");
   await page.getByLabel("Username").fill("FAKE_USER");
@@ -283,12 +296,14 @@ test("connects, configures Balanced, runs analysis, and reaches results", async 
 
   await expect(page.getByRole("heading", { name: "Completed" })).toBeVisible();
   await expect(page.getByText("18")).toBeVisible();
+  await captureVisual(page, testInfo, "analysis-complete-dark", 1440, 900);
   await page.getByRole("button", { name: "View Results" }).click();
   await expect(page.getByRole("heading", { name: "Relationship Explorer" })).toBeVisible();
   await expect(page.getByText("CORE.ORDERS")).toBeVisible();
   await page.getByText("CORE.ORDERS").click();
   await expect(page.getByRole("heading", { name: "Score evidence" })).toBeVisible();
   await expect(page.getByText("Strong bounded evidence supports this relationship.")).toBeVisible();
+  await captureVisual(page, testInfo, "results-dark", 1440, 900);
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByRole("complementary", { name: "Relationship inspector" })).toBeVisible();
   await page.getByRole("button", { name: "Close inspector" }).click();
@@ -317,6 +332,7 @@ test("connects, configures Balanced, runs analysis, and reaches results", async 
   await page.getByTestId(`erd-edge-${relationshipId}`).click({ force: true });
   await expect(page.getByRole("heading", { name: "Score evidence" })).toBeVisible();
   await expect(page.getByText("Strong bounded evidence supports this relationship.")).toBeVisible();
+  await captureVisual(page, testInfo, "erd-inspector-dark", 1440, 900);
   await page.getByRole("button", { name: "Close inspector" }).click();
 
   await page.getByText("ORDERS", { exact: true }).click();
@@ -325,9 +341,13 @@ test("connects, configures Balanced, runs analysis, and reaches results", async 
   await expect(page.getByRole("button", { name: "Exit Focus" })).toBeVisible();
   await page.getByRole("button", { name: "Exit Focus" }).click();
   await expect(page.getByText("2 tables · 1 relationships")).toBeVisible();
+  await captureVisual(page, testInfo, "erd-dark", 1920, 1080);
+  await page.waitForTimeout(1100); // Let React Flow complete its delayed attribution visibility audit.
   await page.getByRole("link", { name: "DBML & Exports" }).click();
   await expect(page.getByRole("heading", { name: "Artifacts & DBML" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "DBML Code" })).toBeVisible();
+  await page.getByRole("button", { name: "Switch to light theme" }).click();
+  await captureVisual(page, testInfo, "exports-light", 1366, 768);
   await page.getByRole("button", { name: "Copy" }).click();
   await expect(page.getByRole("button", { name: "Copied" })).toBeVisible();
 

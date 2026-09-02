@@ -1,25 +1,28 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, CircleAlert } from "lucide-react";
-import { useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 
 import type { AnalysisConfiguration, RunStatusResponse } from "../../api/client";
 import { ApiRequestError, toDisplayMessage } from "../../api/errors";
+import { ActivityIndicator } from "../../components/ui/activity-indicator";
+import { useWorkspaceStore } from "../workspace/workspace-store";
 import { AnalysisConfigurationForm } from "./analysis-configuration-form";
 import { AnalysisRunView } from "./analysis-run-view";
 import { useCancelRun, useCreateRun, useRunStatus } from "./run-api";
 import { useRunEvents } from "./use-run-events";
 
 export function AnalysisPage() {
-  const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const connectionId =
-    typeof location.state?.connectionId === "string" ? location.state.connectionId : null;
-  const schemas = Array.isArray(location.state?.schemas)
-    ? location.state.schemas.filter((value: unknown): value is string => typeof value === "string")
-    : [];
-  const [runId, setRunId] = useState<string | null>(null);
+  const connection = useWorkspaceStore((state) => state.connection);
+  const selectedSchemas = useWorkspaceStore((state) => state.selectedSchemas);
+  const workspaceRun = useWorkspaceStore((state) => state.run);
+  const startWorkspaceRun = useWorkspaceStore((state) => state.startRun);
+  const updateWorkspaceRun = useWorkspaceStore((state) => state.updateRun);
+  const clearRun = useWorkspaceStore((state) => state.clearRun);
+  const schemas = selectedSchemas.map((schema) => schema.name);
+  const runId = workspaceRun?.runId ?? null;
   const [startError, setStartError] = useState<string | null>(null);
   const [reconnectRequired, setReconnectRequired] = useState(false);
   const createMutation = useCreateRun();
@@ -27,17 +30,29 @@ export function AnalysisPage() {
   const statusQuery = useRunStatus(runId);
   useRunEvents(runId);
 
-  if (!connectionId || schemas.length === 0) {
+  useEffect(() => {
+    const run = statusQuery.data;
+    if (!run) return;
+    updateWorkspaceRun({
+      runId: run.run_id,
+      state: run.state,
+      current: run.current ?? 0,
+      total: run.total ?? 0,
+      message: run.message,
+    });
+  }, [statusQuery.data, updateWorkspaceRun]);
+
+  if (!connection || schemas.length === 0) {
     return (
       <section className="mx-auto max-w-3xl px-5 py-10" aria-labelledby="analysis-required-title">
-        <div className="border-l-2 border-warning bg-surface px-5 py-4">
+        <div className="rf-panel border-l-2 border-l-warning px-5 py-5">
           <CircleAlert aria-hidden="true" className="size-5 text-warning" />
           <h1 className="mt-3 text-lg font-semibold text-text" id="analysis-required-title">
             Reconnect and select schemas
           </h1>
           <p className="mt-2 text-sm leading-6 text-text-muted">
             Analysis configuration requires an active runtime Oracle session and at least one
-            selected schema.
+            selected schema. Completed artifacts remain available from the workflow rail.
           </p>
           <Link
             className="mt-4 inline-flex items-center gap-2 text-sm text-accent hover:underline"
@@ -55,7 +70,7 @@ export function AnalysisPage() {
     setReconnectRequired(false);
     try {
       const response = await createMutation.mutateAsync({
-        connection_id: connectionId!,
+        connection_id: connection!.connection_id,
         schemas,
         configuration,
       });
@@ -65,11 +80,18 @@ export function AnalysisPage() {
         state: response.status,
         message: "Analysis is queued",
         stats: {},
-        connection_id: connectionId!,
+        connection_id: connection!.connection_id,
         selected_schemas: schemas,
       };
       queryClient.setQueryData(["run", response.run_id], queued);
-      setRunId(response.run_id);
+      startWorkspaceRun({
+        runId: response.run_id,
+        state: response.status,
+        profile: configuration.profile,
+        current: 0,
+        total: 0,
+        message: queued.message,
+      });
     } catch (error) {
       setStartError(toDisplayMessage(error));
       setReconnectRequired(
@@ -83,22 +105,22 @@ export function AnalysisPage() {
   const run = runId && !statusQuery.isError ? statusQuery.data : null;
 
   return (
-    <section className="mx-auto max-w-4xl px-5 py-6 lg:px-8" aria-labelledby="analysis-title">
-      <div className="border-b border-border pb-4">
-        <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-text-muted">
-          Local workflow / Phase 3
+    <section className="mx-auto max-w-5xl px-5 py-7 lg:px-8" aria-labelledby="analysis-title">
+      <div className="border-b border-border pb-5">
+        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-accent">
+          Analysis control plane
         </p>
-        <h1 className="mt-1 text-xl font-semibold tracking-tight text-text" id="analysis-title">
-          {runId ? "Analysis workflow" : "Analysis Configuration"}
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-text" id="analysis-title">
+          {runId ? "Discovery pipeline" : "Analysis Configuration"}
         </h1>
         <p className="mt-1.5 text-sm leading-6 text-text-muted">
           {runId
-            ? "Live state comes from real core boundaries; numeric progress appears only when known."
-            : "Choose a workload profile, review thresholds, and start a local background run."}
+            ? "Live core state with truthful phase and bounded progress reporting."
+            : `${schemas.length} schemas selected. Tune workload and evidence thresholds before starting the local run.`}
         </p>
       </div>
 
-      <div className="mt-5 border border-border bg-surface p-5">
+      <div className="rf-panel mt-5 p-5">
         {!runId ? (
           <>
             {reconnectRequired ? (
@@ -134,7 +156,7 @@ export function AnalysisPage() {
             }}
             onRetry={() => {
               queryClient.removeQueries({ queryKey: ["run", runId] });
-              setRunId(null);
+              clearRun();
             }}
             onViewResults={() => navigate(`/results?run=${encodeURIComponent(runId)}`)}
             run={run}
@@ -156,8 +178,8 @@ export function AnalysisPage() {
             </Link>
           </div>
         ) : (
-          <p className="text-sm text-text-muted" role="status">
-            Recovering run state…
+          <p className="flex items-center gap-2 text-sm text-text-muted" role="status">
+            <ActivityIndicator /> Recovering run state...
           </p>
         )}
       </div>

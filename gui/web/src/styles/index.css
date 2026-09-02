@@ -18,31 +18,35 @@
 
 :root,
 :root[data-theme="dark"] {
-  --rf-background: #0d1014;
-  --rf-surface: #12161b;
-  --rf-surface-elevated: #181d23;
-  --rf-border: #2a3139;
-  --rf-text: #e5e9ee;
-  --rf-text-muted: #8f99a5;
-  --rf-accent: #5fb3a8;
+  --rf-background: #0b0e12;
+  --rf-surface: #11161c;
+  --rf-surface-elevated: #171e25;
+  --rf-border: #29333d;
+  --rf-text: #e8edf2;
+  --rf-text-muted: #8996a3;
+  --rf-accent: #56c8d4;
   --rf-success: #61b88a;
   --rf-warning: #d4a84f;
   --rf-danger: #dc7373;
-  --rf-focus: #83cfc5;
+  --rf-focus: #7bdce5;
+  --rf-accent-glow: rgba(86, 200, 212, 0.2);
+  --rf-grid: rgba(255, 255, 255, 0.018);
 }
 
 :root[data-theme="light"] {
-  --rf-background: #f3f5f6;
+  --rf-background: #f1f4f5;
   --rf-surface: #ffffff;
-  --rf-surface-elevated: #e9edef;
-  --rf-border: #cdd3d8;
-  --rf-text: #1b2229;
-  --rf-text-muted: #626e78;
-  --rf-accent: #16786e;
+  --rf-surface-elevated: #e8edef;
+  --rf-border: #c8d1d6;
+  --rf-text: #182129;
+  --rf-text-muted: #5d6b75;
+  --rf-accent: #087b88;
   --rf-success: #287a52;
   --rf-warning: #946714;
   --rf-danger: #b43e3e;
-  --rf-focus: #147f74;
+  --rf-focus: #087b88;
+  --rf-accent-glow: rgba(8, 123, 136, 0.14);
+  --rf-grid: rgba(16, 34, 43, 0.025);
 }
 
 @layer base {
@@ -68,5 +72,62 @@
   button,
   a {
     -webkit-tap-highlight-color: transparent;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--rf-accent) 30%, transparent);
+  }
+}
+
+@keyframes rf-scan {
+  0% {
+    transform: translateX(-110%);
+    opacity: 0;
+  }
+  18%,
+  82% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(310%);
+    opacity: 0;
+  }
+}
+
+@keyframes rf-live-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+    box-shadow: 0 0 0 0 var(--rf-accent-glow);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 0 5px transparent;
+  }
+}
+
+@layer utilities {
+  .rf-panel {
+    border: 1px solid var(--rf-border);
+    background: color-mix(in srgb, var(--rf-surface) 96%, transparent);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.1);
+  }
+
+  .rf-scan-line {
+    animation: rf-scan 2.4s linear infinite;
+  }
+  .rf-live-dot {
+    animation: rf-live-pulse 1.8s ease-in-out infinite;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

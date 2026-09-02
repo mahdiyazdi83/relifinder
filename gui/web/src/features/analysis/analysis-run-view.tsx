@@ -1,6 +1,7 @@
-import { Ban, Check, Circle, CircleAlert, LoaderCircle, RotateCcw } from "lucide-react";
+import { Ban, Check, Circle, CircleAlert, RotateCcw } from "lucide-react";
 
 import type { RunStatusResponse } from "../../api/client";
+import { ActivityIndicator } from "../../components/ui/activity-indicator";
 import { Button } from "../../components/ui/button";
 
 const phases = [
@@ -119,7 +120,10 @@ export function AnalysisRunView({
         ) : null}
       </div>
 
-      <ol className="mt-5 space-y-1">
+      <div className="relative mt-5 h-1 overflow-hidden bg-surface-elevated" aria-hidden="true">
+        <span className="rf-scan-line absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-accent to-transparent" />
+      </div>
+      <ol className="mt-3 space-y-1">
         {phases.map((phase, index) => {
           const complete =
             currentIndex > index ||
@@ -135,7 +139,7 @@ export function AnalysisRunView({
                 {complete ? (
                   <Check aria-hidden="true" className="size-4 text-success" />
                 ) : active ? (
-                  <LoaderCircle aria-hidden="true" className="size-4 text-accent" />
+                  <ActivityIndicator label={`${phase.label} in progress`} />
                 ) : (
                   <Circle aria-hidden="true" className="size-4 text-text-muted" />
                 )}

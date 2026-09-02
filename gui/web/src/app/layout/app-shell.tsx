@@ -1,21 +1,22 @@
-import { Database, PanelLeftClose } from "lucide-react";
-import { NavLink, Outlet } from "react-router-dom";
+import { Database } from "lucide-react";
+import { Outlet } from "react-router-dom";
 
 import { HealthIndicator } from "../../features/system/health-indicator";
 import { ThemeToggle } from "../../features/theme/theme-toggle";
+import { WorkspaceRail } from "../../features/workspace/workspace-rail";
 
 export function AppShell() {
   return (
-    <div className="grid min-h-screen grid-rows-[3rem_1fr] bg-background text-text">
+    <div className="grid min-h-screen grid-rows-[3.25rem_1fr] bg-background text-text">
       <header
-        className="flex items-center border-b border-border bg-surface px-4"
+        className="relative z-30 flex items-center border-b border-border bg-surface/95 px-4 shadow-[0_1px_0_rgba(255,255,255,0.02)] backdrop-blur"
         aria-label="Application bar"
       >
         <div className="flex min-w-0 items-center gap-2.5">
-          <span className="grid size-7 place-items-center border border-border bg-surface-elevated text-accent">
+          <span className="grid size-8 place-items-center border border-accent/40 bg-accent/8 text-accent shadow-[inset_0_0_18px_var(--rf-accent-glow)]">
             <Database aria-hidden="true" className="size-4" strokeWidth={1.8} />
           </span>
-          <span className="text-sm font-semibold tracking-tight">ReliFinder</span>
+          <span className="text-sm font-semibold tracking-[0.01em]">ReliFinder</span>
           <span className="hidden border-l border-border pl-2 font-mono text-[10px] uppercase tracking-widest text-text-muted sm:inline">
             Local workbench
           </span>
@@ -27,33 +28,9 @@ export function AppShell() {
         </div>
       </header>
 
-      <div className="grid min-h-0 grid-cols-[12.5rem_1fr] max-sm:grid-cols-[3.25rem_1fr]">
-        <aside className="border-r border-border bg-surface" aria-label="Primary navigation">
-          <div className="flex h-10 items-center border-b border-border px-3 text-text-muted max-sm:justify-center">
-            <PanelLeftClose aria-hidden="true" className="size-3.5" />
-            <span className="ml-2 font-mono text-[10px] uppercase tracking-widest max-sm:hidden">
-              Navigation
-            </span>
-          </div>
-          <nav className="p-2">
-            <NavLink
-              className={({ isActive }) =>
-                `flex items-center gap-2 border-l-2 px-2 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus ${
-                  isActive
-                    ? "border-accent bg-surface-elevated text-text"
-                    : "border-transparent text-text-muted hover:bg-surface-elevated hover:text-text"
-                }`
-              }
-              end
-              to="/"
-            >
-              <Database aria-hidden="true" className="size-3.5 shrink-0" strokeWidth={1.8} />
-              <span className="max-sm:sr-only">Connection</span>
-            </NavLink>
-          </nav>
-        </aside>
-
-        <main className="min-w-0 overflow-auto bg-background">
+      <div className="grid min-h-0 grid-cols-[11.5rem_minmax(0,1fr)] max-lg:grid-cols-[3.75rem_minmax(0,1fr)]">
+        <WorkspaceRail />
+        <main className="min-w-0 overflow-auto bg-background [background-image:linear-gradient(var(--rf-grid)_1px,transparent_1px),linear-gradient(90deg,var(--rf-grid)_1px,transparent_1px)] [background-size:32px_32px">
           <Outlet />
         </main>
       </div>

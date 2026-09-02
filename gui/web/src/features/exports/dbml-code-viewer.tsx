@@ -3,6 +3,7 @@ import { Fragment, useEffect, useState } from "react";
 
 import { artifactUrl, type ArtifactMetadata } from "../../api/client";
 import { toDisplayMessage } from "../../api/errors";
+import { ActivityIndicator } from "../../components/ui/activity-indicator";
 import { useDbmlText } from "./export-api";
 
 export function DbmlCodeViewer({ artifact, runId }: { artifact: ArtifactMetadata; runId: string }) {
@@ -28,7 +29,7 @@ export function DbmlCodeViewer({ artifact, runId }: { artifact: ArtifactMetadata
   if (!artifact.available) {
     return <DbmlState message="DBML was not generated as a valid completed-run artifact." />;
   }
-  if (dbmlQuery.isLoading) return <DbmlState message="Loading DBML code&" />;
+  if (dbmlQuery.isLoading) return <DbmlState loading message="Loading DBML code..." />;
   if (dbmlQuery.isError) return <DbmlState error message={toDisplayMessage(dbmlQuery.error)} />;
   if (!dbmlQuery.data) {
     return <DbmlState message="The generated DBML is empty. Download is disabled." />;
@@ -45,7 +46,7 @@ export function DbmlCodeViewer({ artifact, runId }: { artifact: ArtifactMetadata
             DBML Code
           </h2>
           <p className="mt-1 font-mono text-[10px] text-text-muted">
-            {artifact.filename} � {formatBytes(artifact.size_bytes)}
+            {artifact.filename} - {formatBytes(artifact.size_bytes)}
           </p>
         </div>
         <div className="ml-auto flex items-center gap-2">
@@ -123,13 +124,24 @@ function HighlightedLine({ line }: { line: string }) {
   );
 }
 
-function DbmlState({ message, error = false }: { message: string; error?: boolean }) {
+function DbmlState({
+  message,
+  error = false,
+  loading = false,
+}: {
+  message: string;
+  error?: boolean;
+  loading?: boolean;
+}) {
   return (
     <div
       className="border-l-2 border-warning bg-surface px-4 py-4 text-sm text-text-muted"
       role={error ? "alert" : "status"}
     >
-      {message}
+      <span className="inline-flex items-center gap-2">
+        {loading ? <ActivityIndicator /> : null}
+        {message}
+      </span>
     </div>
   );
 }

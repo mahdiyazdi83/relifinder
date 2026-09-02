@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AppProviders } from "../../app/providers/app-providers";
 import { appRoutes } from "../../app/router/routes";
 import { server } from "../../test/mocks/server";
+import { useWorkspaceStore } from "../workspace/workspace-store";
 
 const runId = "opaque-run-id-123456789012345678901234";
 const connectionId = "opaque-session-id-12345678901234567890";
@@ -35,6 +36,22 @@ class MockEventSource {
 }
 
 function renderAnalysis() {
+  useWorkspaceStore.getState().clearRun();
+  useWorkspaceStore
+    .getState()
+    .setConnection({
+      connection_id: connectionId,
+      expires_in_seconds: 900,
+      checks: [],
+      host: "db.internal",
+      port: 1521,
+      serviceName: "ORCLPDB1",
+      username: "APP",
+    });
+  useWorkspaceStore.getState().setSelectedSchemas([
+    { name: "CORE", table_count: 7, column_count: 39, oracle_maintained: false },
+    { name: "APP", table_count: 12, column_count: 84, oracle_maintained: false },
+  ]);
   return render(
     <AppProviders>
       <RouterProvider

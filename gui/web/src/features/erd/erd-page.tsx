@@ -1,10 +1,12 @@
 import "@xyflow/react/dist/style.css";
 
 import { ArrowLeft, Code2, Network } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { toDisplayMessage } from "../../api/errors";
+import { ActivityIndicator } from "../../components/ui/activity-indicator";
+import { useWorkspaceStore } from "../workspace/workspace-store";
 import { buildErdVisualization } from "./erd-adapter";
 import { useErdGraph } from "./erd-api";
 import type { ErdFilters } from "./erd-types";
@@ -17,8 +19,13 @@ export function ErdPage() {
   const selectedRelationshipId = searchParams.get("rel");
   const focusTableId = searchParams.get("focus");
   const graphQuery = useErdGraph(runId);
+  const adoptCompletedRun = useWorkspaceStore((state) => state.adoptCompletedRun);
   const [filters, setFilters] = useState<ErdFilters | null>(null);
   const [expandedTables, setExpandedTables] = useState<Set<string>>(() => new Set());
+
+  useEffect(() => {
+    if (runId && graphQuery.data) adoptCompletedRun(runId);
+  }, [adoptCompletedRun, graphQuery.data, runId]);
 
   const effectiveFilters = useMemo<ErdFilters | null>(
     () =>
@@ -85,7 +92,7 @@ export function ErdPage() {
   }
   if (graphQuery.isLoading || !effectiveFilters || !visualization) {
     return (
-      <ErdState loading title="Interactive ERD" message="Loading safe completed-run metadata…" />
+      <ErdState loading title="Interactive ERD" message="Loading safe completed-run metadata..." />
     );
   }
 
@@ -156,7 +163,11 @@ function ErdState({
         <h1 className="text-lg font-semibold text-text" id="erd-state-title">
           {title}
         </h1>
-        <p className="mt-2 text-sm text-text-muted" role={loading ? "status" : undefined}>
+        <p
+          className="mt-2 flex items-center gap-2 text-sm text-text-muted"
+          role={loading ? "status" : undefined}
+        >
+          {loading ? <ActivityIndicator /> : null}
           {message}
         </p>
         {!loading ? (

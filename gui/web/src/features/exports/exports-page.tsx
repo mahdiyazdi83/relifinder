@@ -7,11 +7,13 @@ import {
   FileSpreadsheet,
   Network,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { artifactUrl, type ArtifactMetadata } from "../../api/client";
 import { toDisplayMessage } from "../../api/errors";
+import { ActivityIndicator } from "../../components/ui/activity-indicator";
+import { useWorkspaceStore } from "../workspace/workspace-store";
 import { DbmlCodeViewer } from "./dbml-code-viewer";
 import { useArtifacts } from "./export-api";
 
@@ -19,11 +21,16 @@ export function ExportsPage() {
   const [searchParams] = useSearchParams();
   const runId = searchParams.get("run");
   const artifactsQuery = useArtifacts(runId);
+  const adoptCompletedRun = useWorkspaceStore((state) => state.adoptCompletedRun);
   const dbmlArtifacts = useMemo(
     () => artifactsQuery.data?.artifacts.filter((artifact) => artifact.type === "dbml") ?? [],
     [artifactsQuery.data],
   );
   const [selectedDbmlId, setSelectedDbmlId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (runId && artifactsQuery.data) adoptCompletedRun(runId);
+  }, [adoptCompletedRun, artifactsQuery.data, runId]);
 
   if (!runId) {
     return (
@@ -32,7 +39,7 @@ export function ExportsPage() {
   }
   if (artifactsQuery.isLoading) {
     return (
-      <ExportState loading title="Run artifacts" message="Checking completed-run artifacts&" />
+      <ExportState loading title="Run artifacts" message="Checking completed-run artifacts..." />
     );
   }
   if (artifactsQuery.isError) {
@@ -55,7 +62,7 @@ export function ExportsPage() {
             Artifacts & DBML
           </h1>
           <p className="mt-1.5 text-sm text-text-muted">
-            Exact core-generated outputs � no Oracle connection required
+            Exact core-generated outputs - no Oracle connection required
           </p>
         </div>
         <div className="ml-auto flex items-center border border-border text-xs">
@@ -136,7 +143,7 @@ export function ExportsPage() {
               {selectedDbml.unknown_cardinality_omitted != null ? (
                 <>
                   {" "}
-                  � Unknown-cardinality relationships omitted:{" "}
+                  - Unknown-cardinality relationships omitted:{" "}
                   {selectedDbml.unknown_cardinality_omitted.toLocaleString()}
                 </>
               ) : null}
@@ -182,7 +189,7 @@ function ArtifactRow({ artifact, runId }: { artifact: ArtifactMetadata; runId: s
         </p>
         <p className="font-mono text-[10px] text-text-muted">
           {artifact.filename}
-          {artifact.size_bytes != null ? ` � ${artifact.size_bytes.toLocaleString()} bytes` : ""}
+          {artifact.size_bytes != null ? ` - ${artifact.size_bytes.toLocaleString()} bytes` : ""}
         </p>
       </div>
       {!artifact.available ? (
@@ -243,7 +250,11 @@ function ExportState({
     <section className="mx-auto max-w-3xl px-5 py-10">
       <div className="border-l-2 border-warning bg-surface px-5 py-4">
         <h1 className="text-lg font-semibold text-text">{title}</h1>
-        <p className="mt-2 text-sm text-text-muted" role={loading ? "status" : undefined}>
+        <p
+          className="mt-2 flex items-center gap-2 text-sm text-text-muted"
+          role={loading ? "status" : undefined}
+        >
+          {loading ? <ActivityIndicator /> : null}
           {message}
         </p>
         {!loading ? (

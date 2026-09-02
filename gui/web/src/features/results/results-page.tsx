@@ -1,9 +1,11 @@
 import { ArrowLeft, DatabaseZap, Download, Network } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import type { RelationshipListItem } from "../../api/client";
 import { toDisplayMessage } from "../../api/errors";
+import { ActivityIndicator } from "../../components/ui/activity-indicator";
+import { useWorkspaceStore } from "../workspace/workspace-store";
 import { RelationshipInspector } from "./relationship-inspector";
 import {
   defaultRelationshipFilters,
@@ -23,9 +25,14 @@ export function ResultsPage() {
   const [filters, setFilters] = useState<RelationshipFilters>(defaultRelationshipFilters);
   const [page, setPage] = useState(0);
   const relationshipsQuery = useRelationships(runId);
+  const adoptCompletedRun = useWorkspaceStore((state) => state.adoptCompletedRun);
   const detailQuery = useRelationshipDetail(runId, selectedId);
   const all = relationshipsQuery.data?.relationships ?? EMPTY_RELATIONSHIPS;
   const filtered = useMemo(() => filterAndSortRelationships(all, filters), [all, filters]);
+
+  useEffect(() => {
+    if (runId && relationshipsQuery.data) adoptCompletedRun(runId);
+  }, [adoptCompletedRun, relationshipsQuery.data, runId]);
 
   function changeFilters(next: RelationshipFilters) {
     setFilters(next);
@@ -59,8 +66,8 @@ export function ResultsPage() {
         <h1 className="text-lg font-semibold text-text" id="results-loading-title">
           Relationship Explorer
         </h1>
-        <p className="mt-3 text-sm text-text-muted" role="status">
-          Loading completed relationship results…
+        <p className="mt-3 flex items-center gap-2 text-sm text-text-muted" role="status">
+          <ActivityIndicator /> Loading completed relationship results...
         </p>
       </section>
     );
@@ -77,7 +84,7 @@ export function ResultsPage() {
 
   const data = relationshipsQuery.data!;
   return (
-    <section className="min-w-0 px-4 py-5 lg:px-6" aria-labelledby="results-title">
+    <section className="min-w-0 px-4 py-6 lg:px-7" aria-labelledby="results-title">
       <header className="flex flex-wrap items-end gap-4 border-b border-border pb-4">
         <div>
           <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-text-muted">
