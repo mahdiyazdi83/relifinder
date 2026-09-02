@@ -21,7 +21,7 @@ keywords = [
   "oracledb",
 ]
 dependencies = [
-  "oracledb>=2.0,<4",
+  "oracledb>=2.0,<5",
   "PyYAML>=6.0,<7",
 ]
 classifiers = [
