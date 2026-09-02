@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import importlib.util
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-import start
+_START_PATH = Path(__file__).resolve().parents[1] / "start.py"
+_START_SPEC = importlib.util.spec_from_file_location("relifinder_source_start", _START_PATH)
+assert _START_SPEC is not None and _START_SPEC.loader is not None
+start = importlib.util.module_from_spec(_START_SPEC)
+_START_SPEC.loader.exec_module(start)
 
 
 def _fake_environment(directory: Path) -> Path:
