@@ -30,6 +30,7 @@ class DatabaseConfig:
     service_name: str
     username: str
     password_env: str
+    type: str = "oracle"
 
     def password(self) -> str:
         value = os.environ.get(self.password_env)
@@ -114,6 +115,9 @@ def load_config(path: Path) -> AppConfig:
     with path.open("r", encoding="utf-8") as handle:
         raw = _expand_env(yaml.safe_load(handle) or {})
     db = raw.get("database", {})
+    database_type = str(db.get("type", "oracle")).lower()
+    if database_type != "oracle":
+        raise ValueError("database.type must be 'oracle'")
     required = ("host", "service_name", "username", "password_env")
     missing = [key for key in required if not db.get(key)]
     if missing:
@@ -188,6 +192,7 @@ def load_config(path: Path) -> AppConfig:
             service_name=str(db["service_name"]),
             username=str(db["username"]),
             password_env=str(db["password_env"]),
+            type=database_type,
         ),
         schemas=schemas,
         analysis=AnalysisConfig(

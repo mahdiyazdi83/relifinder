@@ -159,8 +159,14 @@ def test_scope_threshold_limit_and_external_table_note(tmp_path: Path):
 
     assert len(results) == 1
     assert results[0].relationship_count == 1
+    assert results[0].highest_detected_confidence == 95
+    assert results[0].below_confidence_threshold == 1
+    assert results[0].omitted_by_scope_filter == 0
     assert results[0].omitted_by_limit == 1
     text = results[0].path.read_text(encoding="utf-8")
+    assert "// Highest detected confidence: 95" in text
+    assert "// Below confidence threshold: 1" in text
+    assert "// Max-relations limit omitted: 1" in text
     assert "External table referenced by SALES" in text
     assert "ORDER_ARCHIVE" not in text
 
@@ -351,7 +357,7 @@ def test_generic_filter_is_optional_and_order_is_deterministic(tmp_path: Path):
         tmp_path / "included",
         ErdExportOptions(min_confidence=80),
     )[0].path.read_text(encoding="utf-8")
-    excluded = export_erd(
+    excluded_result = export_erd(
         expanded,
         tmp_path / "excluded",
         ErdExportOptions(
@@ -359,10 +365,13 @@ def test_generic_filter_is_optional_and_order_is_deterministic(tmp_path: Path):
             exclude_generic=True,
             generic_entities=("STATUS", "TYPE", "CATEGORY", "USER", "CODE"),
         ),
-    )[0].path.read_text(encoding="utf-8")
+    )[0]
+    excluded = excluded_result.path.read_text(encoding="utf-8")
 
     assert "APP.ITEM.STATUS_ID" in included
     assert "APP.ITEM.STATUS_ID" not in excluded
+    assert excluded_result.omitted_by_generic_filter == 1
+    assert "// Generic filter omitted: 1" in excluded
     assert excluded.index("A_ORDERS.CUSTOMER_ID") < excluded.index("Z_ORDERS.CUSTOMER_ID")
 
 

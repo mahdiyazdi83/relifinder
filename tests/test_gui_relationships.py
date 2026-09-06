@@ -357,7 +357,7 @@ def test_erd_graph_uses_safe_metadata_and_includes_below_report_threshold(
         detail_response = client.get(f"/api/runs/{run_id}/relationships/{low['id']}")
 
     assert graph_response.status_code == 200
-    assert graph["default_min_confidence"] == 40
+    assert graph["default_min_confidence"] == 80
     assert graph["schemas"] == ["APP", "CORE"]
     assert len(graph["tables"]) == 6
     assert len(graph["relationships"]) == 3

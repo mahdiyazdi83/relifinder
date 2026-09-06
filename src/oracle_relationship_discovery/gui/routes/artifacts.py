@@ -1,24 +1,41 @@
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import FileResponse
 
-from oracle_relationship_discovery.gui.schemas.artifacts import ArtifactListResponse
+from oracle_relationship_discovery.gui.schemas.artifacts import (
+    ArtifactListResponse,
+    DbmlRegenerationRequest,
+    DbmlRegenerationResponse,
+)
 from oracle_relationship_discovery.gui.schemas.errors import ApiErrorResponse
 from oracle_relationship_discovery.gui.services.artifacts import ArtifactService
 
-router = APIRouter(prefix="/runs/{run_id}/artifacts", tags=["artifacts"])
-ERROR_RESPONSES = {code: {"model": ApiErrorResponse} for code in (404, 409, 422)}
+router = APIRouter(prefix="/runs/{run_id}", tags=["artifacts"])
+ERROR_RESPONSES = {code: {"model": ApiErrorResponse} for code in (404, 409, 422, 500)}
 
 
 def get_artifact_service(request: Request) -> ArtifactService:
     return request.app.state.artifact_service
 
 
-@router.get("", response_model=ArtifactListResponse, responses=ERROR_RESPONSES)
+@router.get("/artifacts", response_model=ArtifactListResponse, responses=ERROR_RESPONSES)
 def list_artifacts(request: Request, run_id: str) -> ArtifactListResponse:
     return get_artifact_service(request).list(run_id)
 
 
-@router.get("/{artifact_id}", response_class=FileResponse, responses=ERROR_RESPONSES)
+@router.post(
+    "/exports/dbml",
+    response_model=DbmlRegenerationResponse,
+    responses=ERROR_RESPONSES,
+)
+def regenerate_dbml(
+    request: Request,
+    run_id: str,
+    payload: DbmlRegenerationRequest,
+) -> DbmlRegenerationResponse:
+    return get_artifact_service(request).regenerate_dbml(run_id, payload)
+
+
+@router.get("/artifacts/{artifact_id}", response_class=FileResponse, responses=ERROR_RESPONSES)
 def get_artifact(
     request: Request,
     run_id: str,

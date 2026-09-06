@@ -24,6 +24,7 @@ from oracle_relationship_discovery.config import (
     PerformanceConfig,
     SamplingConfig,
 )
+from oracle_relationship_discovery.database.base import DatabaseOperation
 from oracle_relationship_discovery.gui.errors import ApiProblem
 from oracle_relationship_discovery.gui.schemas.runs import (
     AnalysisConfiguration,
@@ -40,6 +41,7 @@ from oracle_relationship_discovery.gui.services.connection_sessions import (
     RuntimeConnectionSession,
     SessionNotFoundError,
 )
+from oracle_relationship_discovery.providers.oracle import ORACLE_ADAPTER
 
 LOGGER = logging.getLogger(__name__)
 TERMINAL_STATES = {RunState.COMPLETED, RunState.FAILED, RunState.CANCELLED}
@@ -115,6 +117,7 @@ class CoreAnalysisExecutor(AnalysisExecutor):
                 ),
                 progress_callback=progress_callback,
                 cancellation_token=cancellation_token,
+                database_adapter=ORACLE_ADAPTER,
                 generated_at=started.isoformat(timespec="microseconds"),
             )
             cancellation_token.raise_if_cancelled()
@@ -149,6 +152,7 @@ class CompletedRun:
     min_report_confidence: float
     erd_min_confidence: float
     erd_scope: str
+    erd_exclude_generic: bool
 
 
 @dataclass(slots=True)
@@ -274,6 +278,7 @@ class RunService:
                 min_report_confidence=record.configuration.min_report_confidence,
                 erd_min_confidence=record.configuration.erd_min_confidence,
                 erd_scope=record.configuration.erd_scope,
+                erd_exclude_generic=record.configuration.erd_exclude_generic,
             )
 
     def cancel(self, run_id: str) -> RunCancelResponse:
@@ -498,16 +503,5 @@ def _core_config(
 
 
 def _safe_execution_error(exc: Exception) -> AnalysisExecutionError:
-    value = str(exc).upper()
-    if "ORA-01013" in value or "CANCEL" in value:
-        return AnalysisExecutionError("ANALYSIS_CANCELLED", "Analysis was cancelled safely.")
-    if "ORA-12170" in value or "TIMEOUT" in value:
-        return AnalysisExecutionError("ANALYSIS_TIMEOUT", "Analysis timed out.")
-    if any(code in value for code in ("ORA-03113", "ORA-03114", "DPY-1001", "DPY-4011")):
-        return AnalysisExecutionError("ORACLE_CONNECTION_LOST", "Oracle connection was lost.")
-    if any(name in value for name in ("ALL_TABLES", "ALL_TAB_COLUMNS", "ALL_CONSTRAINTS")):
-        return AnalysisExecutionError("METADATA_ACCESS_FAILED", "Oracle metadata access failed.")
-    return AnalysisExecutionError(
-        "UNEXPECTED_ANALYSIS_FAILURE",
-        "Unexpected analysis failure.",
-    )
+    error = ORACLE_ADAPTER.normalize_error(exc, DatabaseOperation.ANALYSIS)
+    return AnalysisExecutionError(error.code, error.message)

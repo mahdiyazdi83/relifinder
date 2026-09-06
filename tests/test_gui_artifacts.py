@@ -1,3 +1,4 @@
+import threading
 import time
 from contextlib import contextmanager
 from pathlib import Path
@@ -8,8 +9,16 @@ from oracle_relationship_discovery.analysis.service import AnalysisResult
 from oracle_relationship_discovery.gui.app import create_app
 from oracle_relationship_discovery.gui.services.oracle_gateway import OracleDiscoveryResult
 from oracle_relationship_discovery.gui.services.runs import AnalysisExecutor
-from oracle_relationship_discovery.models import AnalysisStats, SchemaSummary
+from oracle_relationship_discovery.models import (
+    AnalysisStats,
+    ColumnMetadata,
+    SchemaSummary,
+    TableMetadata,
+)
+from oracle_relationship_discovery.output.analysis_results import write_analysis_results
 from oracle_relationship_discovery.output.csv_report import FIELDS
+from oracle_relationship_discovery.output.erd_models import ErdRelationship
+from oracle_relationship_discovery.output.schema_metadata import write_schema_metadata
 
 _CONNECTION = {
     "host": "db.example.invalid",
@@ -83,6 +92,18 @@ Table APP.PARENT {
         )
 
 
+class _BlockingExecutor(AnalysisExecutor):
+    def __init__(self) -> None:
+        self.started = threading.Event()
+
+    def execute(self, **kwargs):
+        token = kwargs["cancellation_token"]
+        self.started.set()
+        while True:
+            token.raise_if_cancelled()
+            time.sleep(0.005)
+
+
 def _completed_run(client: TestClient) -> tuple[str, str]:
     connection = client.post("/api/connections", json=_CONNECTION).json()["connection_id"]
     response = client.post(
@@ -100,6 +121,68 @@ def _completed_run(client: TestClient) -> tuple[str, str]:
             return connection, run_id
         time.sleep(0.01)
     raise AssertionError("run did not complete")
+
+
+def _write_regeneration_sources(run: Path) -> None:
+    relationships = (
+        ErdRelationship(
+            "APP",
+            "ORDERS",
+            "CUSTOMER_ID",
+            "APP",
+            "CUSTOMERS",
+            "ID",
+            "Many-to-One",
+            90,
+            "HIGH",
+            validation_status="VALIDATED",
+            source_datatype="NUMBER",
+            target_datatype="NUMBER",
+        ),
+        ErdRelationship(
+            "APP",
+            "INVOICES",
+            "CUSTOMER_ID",
+            "APP",
+            "CUSTOMERS",
+            "ID",
+            "One-to-One",
+            60,
+            "MEDIUM",
+            validation_status="NOT_RUN",
+            source_datatype="NUMBER",
+            target_datatype="NUMBER",
+        ),
+        ErdRelationship(
+            "APP",
+            "EVENTS",
+            "CUSTOMER_ID",
+            "APP",
+            "CUSTOMERS",
+            "ID",
+            "Unknown / Insufficient Evidence",
+            55.04,
+            "MEDIUM",
+            validation_status="SKIPPED",
+            source_datatype="NUMBER",
+            target_datatype="NUMBER",
+        ),
+    )
+    tables = [
+        TableMetadata(
+            "APP",
+            name,
+            columns=[ColumnMetadata("APP", name, column, "NUMBER")],
+        )
+        for name, column in (
+            ("ORDERS", "CUSTOMER_ID"),
+            ("INVOICES", "CUSTOMER_ID"),
+            ("EVENTS", "CUSTOMER_ID"),
+            ("CUSTOMERS", "ID"),
+        )
+    ]
+    write_analysis_results(run / "analysis-results.json", relationships, "sampled", "2026-09-06")
+    write_schema_metadata(run / "schema-metadata.json", tables, "2026-09-06")
 
 
 def test_artifact_manifest_and_exact_streamed_responses(tmp_path: Path) -> None:
@@ -203,3 +286,114 @@ def test_non_completed_and_invalid_run_do_not_expose_artifacts(tmp_path: Path) -
 
     assert invalid.status_code == 404
     assert invalid.json()["error"]["code"] == "RUN_NOT_FOUND"
+
+
+def test_dbml_regeneration_is_offline_deterministic_and_path_safe(tmp_path: Path) -> None:
+    gateway = _Gateway()
+    executor = _ArtifactExecutor(tmp_path)
+    with TestClient(create_app(gateway=gateway, analysis_executor=executor)) as client:
+        connection_id, run_id = _completed_run(client)
+        run = tmp_path / run_id
+        _write_regeneration_sources(run)
+        assert client.delete(f"/api/connections/{connection_id}").status_code == 204
+
+        first = client.post(
+            f"/api/runs/{run_id}/exports/dbml",
+            json={"min_confidence": 50},
+        )
+        second = client.post(
+            f"/api/runs/{run_id}/exports/dbml",
+            json={"min_confidence": 50},
+        )
+
+        assert first.status_code == 200
+        assert second.status_code == 200
+        assert first.json()["generated_artifact_ids"] == second.json()["generated_artifact_ids"]
+        artifact_id = first.json()["generated_artifact_ids"][0]
+        generated = client.get(f"/api/runs/{run_id}/artifacts/{artifact_id}")
+        download = client.get(f"/api/runs/{run_id}/artifacts/{artifact_id}?download=true")
+
+    assert generated.status_code == 200
+    assert generated.text == download.text
+    assert "// Minimum confidence: 50" in generated.text
+    assert "// Highest detected confidence: 90" in generated.text
+    assert "// Below confidence threshold: 0" in generated.text
+    assert "// Eligible after filters/limit: 3" in generated.text
+    assert "// Rendered DBML references: 2" in generated.text
+    assert "// Unknown cardinality omitted: 1" in generated.text
+    assert generated.text.count("\nRef:") == 2
+    assert "Ref omitted: DBML has no neutral operator for unknown cardinality." in generated.text
+    generated_files = list((run / "erd" / "regenerated").rglob("*.dbml"))
+    assert len(generated_files) == 1
+    assert generated_files[0].resolve().is_relative_to((run / "erd").resolve())
+    assert gateway.calls == 1
+    assert executor.calls == 1
+
+
+def test_dbml_regeneration_reports_real_empty_reason(tmp_path: Path) -> None:
+    with TestClient(
+        create_app(gateway=_Gateway(), analysis_executor=_ArtifactExecutor(tmp_path))
+    ) as client:
+        _, run_id = _completed_run(client)
+        _write_regeneration_sources(tmp_path / run_id)
+        response = client.post(
+            f"/api/runs/{run_id}/exports/dbml",
+            json={"min_confidence": 95},
+        )
+        artifact_id = response.json()["generated_artifact_ids"][0]
+        metadata = next(item for item in response.json()["artifacts"] if item["id"] == artifact_id)
+
+    assert metadata["min_confidence"] == 95
+    assert metadata["highest_detected_confidence"] == 90
+    assert metadata["below_confidence_threshold"] == 3
+    assert metadata["eligible_relationships"] == 0
+    assert metadata["rendered_relationships"] == 0
+    assert metadata["unknown_cardinality_omitted"] == 0
+
+
+def test_dbml_regeneration_rejects_path_input_and_missing_sources(tmp_path: Path) -> None:
+    with TestClient(
+        create_app(gateway=_Gateway(), analysis_executor=_ArtifactExecutor(tmp_path))
+    ) as client:
+        _, run_id = _completed_run(client)
+        path_attempt = client.post(
+            f"/api/runs/{run_id}/exports/dbml",
+            json={"min_confidence": 50, "path": "../../outside.dbml"},
+        )
+        missing_source = client.post(
+            f"/api/runs/{run_id}/exports/dbml",
+            json={"min_confidence": 50},
+        )
+        invalid_run = client.post(
+            "/api/runs/not-a-run/exports/dbml",
+            json={"min_confidence": 50},
+        )
+
+    assert path_attempt.status_code == 422
+    assert missing_source.status_code == 409
+    assert missing_source.json()["error"]["code"] == "DBML_REGENERATION_SOURCE_UNAVAILABLE"
+    assert invalid_run.status_code == 404
+
+
+def test_dbml_regeneration_requires_a_completed_run(tmp_path: Path) -> None:
+    executor = _BlockingExecutor()
+    with TestClient(create_app(gateway=_Gateway(), analysis_executor=executor)) as client:
+        connection = client.post("/api/connections", json=_CONNECTION).json()["connection_id"]
+        created = client.post(
+            "/api/runs",
+            json={
+                "connection_id": connection,
+                "schemas": ["APP"],
+                "configuration": {"profile": "BALANCED"},
+            },
+        )
+        run_id = created.json()["run_id"]
+        assert executor.started.wait(timeout=1)
+        response = client.post(
+            f"/api/runs/{run_id}/exports/dbml",
+            json={"min_confidence": 50},
+        )
+        client.post(f"/api/runs/{run_id}/cancel")
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "RUN_NOT_COMPLETED"

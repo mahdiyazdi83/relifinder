@@ -21,6 +21,8 @@ export type ErdGraphTable = components["schemas"]["ErdGraphTable"];
 export type ErdGraphColumn = components["schemas"]["ErdGraphColumn"];
 export type ArtifactListResponse = components["schemas"]["ArtifactListResponse"];
 export type ArtifactMetadata = components["schemas"]["ArtifactMetadata"];
+export type DbmlRegenerationRequest = components["schemas"]["DbmlRegenerationRequest"];
+export type DbmlRegenerationResponse = components["schemas"]["DbmlRegenerationResponse"];
 
 async function requestJson<T>(input: string, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {
@@ -114,6 +116,16 @@ export function getArtifacts(runId: string, signal?: AbortSignal): Promise<Artif
   return requestJson<ArtifactListResponse>(`/api/runs/${encodeURIComponent(runId)}/artifacts`, {
     signal,
   });
+}
+
+export function regenerateDbml(
+  runId: string,
+  payload: DbmlRegenerationRequest,
+): Promise<DbmlRegenerationResponse> {
+  return requestJson<DbmlRegenerationResponse>(
+    `/api/runs/${encodeURIComponent(runId)}/exports/dbml`,
+    { method: "POST", body: JSON.stringify(payload) },
+  );
 }
 
 export function artifactUrl(runId: string, artifactId: string, download = false): string {

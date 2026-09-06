@@ -113,6 +113,25 @@ describe("interactive ERD page", () => {
     expect(screen.getByText("3 tables · 2 relationships")).toBeInTheDocument();
   });
 
+  it("uses the run ERD threshold and keeps threshold edits client-only", async () => {
+    const user = userEvent.setup();
+    let erdRequests = 0;
+    server.use(
+      http.get("/api/runs/:runId/erd", () => {
+        erdRequests += 1;
+        return HttpResponse.json({ ...graph, run_id: runId });
+      }),
+    );
+    renderErd();
+
+    const threshold = await screen.findByLabelText("ERD minimum confidence");
+    expect(threshold).toHaveValue(60);
+    expect(screen.getByText("Visualization filter only")).toBeInTheDocument();
+    await user.clear(threshold);
+    await user.type(threshold, "90");
+    await waitFor(() => expect(screen.getByText("2 tables · 1 relationships")).toBeInTheDocument());
+    expect(erdRequests).toBe(1);
+  });
   it("selects an edge and reuses the full Phase 4 evidence inspector", async () => {
     installApi();
     renderErd(`/erd?run=${runId}&rel=${high.id}`);

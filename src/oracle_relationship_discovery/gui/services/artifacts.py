@@ -1,23 +1,41 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
+from oracle_relationship_discovery.config import AnalysisConfig
 from oracle_relationship_discovery.gui.errors import ApiProblem
 from oracle_relationship_discovery.gui.schemas.artifacts import (
     ArtifactListResponse,
     ArtifactMetadata,
+    DbmlRegenerationRequest,
+    DbmlRegenerationResponse,
 )
 from oracle_relationship_discovery.gui.services.runs import CompletedRun, RunService
+from oracle_relationship_discovery.output.analysis_results import AnalysisResultsError
+from oracle_relationship_discovery.output.erd_builder import load_erd_model
+from oracle_relationship_discovery.output.erd_models import ErdExportOptions
+from oracle_relationship_discovery.output.erd_service import export_erd
+from oracle_relationship_discovery.output.schema_metadata import SchemaMetadataError
 
 _CSV_HEADER = "analysis_mode,report_generated_at,source_schema,source_table,source_column,"
 _DBML_FIELDS = {
     "Minimum confidence": "min_confidence",
     "Scope": "scope",
+    "Input relationships": "input_relationships",
+    "Duplicate relationships omitted": "duplicate_relationships_omitted",
+    "Highest detected confidence": "highest_detected_confidence",
+    "Below confidence threshold": "below_confidence_threshold",
+    "Validation-status filter omitted": "omitted_by_validation_filter",
+    "Scope filter omitted": "omitted_by_scope_filter",
+    "Generic filter omitted": "omitted_by_generic_filter",
+    "Max-relations limit omitted": "omitted_by_limit",
     "Eligible after filters/limit": "eligible_relationships",
     "Rendered DBML references": "rendered_relationships",
     "Unknown cardinality omitted": "unknown_cardinality_omitted",
@@ -37,12 +55,108 @@ class ArtifactService:
 
     def __init__(self, runs: RunService) -> None:
         self.runs = runs
+        self._regeneration_lock = threading.RLock()
 
     def list(self, run_id: str) -> ArtifactListResponse:
         completed = self.runs.completed(run_id)
         manifest = self._manifest(completed)
         return ArtifactListResponse(
             run_id=run_id,
+            artifacts=tuple(item.metadata for item in manifest.values()),
+        )
+
+    def regenerate_dbml(
+        self,
+        run_id: str,
+        request: DbmlRegenerationRequest,
+    ) -> DbmlRegenerationResponse:
+        completed = self.runs.completed(run_id)
+        root = completed.run_directory.resolve()
+        analysis_path = (root / "analysis-results.json").resolve()
+        metadata_path = (root / "schema-metadata.json").resolve()
+        if (
+            analysis_path.parent != root
+            or metadata_path.parent != root
+            or not analysis_path.is_file()
+            or not metadata_path.is_file()
+        ):
+            raise ApiProblem(
+                409,
+                "DBML_REGENERATION_SOURCE_UNAVAILABLE",
+                "Completed-run analysis artifacts are unavailable for DBML regeneration.",
+            )
+
+        try:
+            model = load_erd_model(analysis_path, metadata_path)
+        except OSError:
+            raise ApiProblem(
+                409,
+                "DBML_REGENERATION_SOURCE_UNAVAILABLE",
+                "Completed-run analysis artifacts are unavailable for DBML regeneration.",
+            ) from None
+        except (AnalysisResultsError, SchemaMetadataError, ValueError):
+            raise ApiProblem(
+                422,
+                "DBML_REGENERATION_SOURCE_CORRUPT",
+                "Completed-run analysis artifacts could not be read safely.",
+            ) from None
+
+        options = ErdExportOptions(
+            scope=completed.erd_scope,
+            min_confidence=request.min_confidence,
+            exclude_generic=completed.erd_exclude_generic,
+            generic_entities=AnalysisConfig().generic_entities,
+        )
+        option_payload = {
+            "exclude_generic": options.exclude_generic,
+            "format": options.format,
+            "min_confidence": options.min_confidence,
+            "scope": options.scope,
+            "validation_statuses": options.validation_statuses,
+        }
+        option_key = hashlib.sha256(
+            json.dumps(option_payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()[:16]
+        erd_root = (root / "erd").resolve()
+        destination_root = (erd_root / "regenerated" / option_key).resolve()
+        if erd_root.parent != root or not destination_root.is_relative_to(erd_root):
+            raise ApiProblem(500, "UNSAFE_ARTIFACT_PATH", "Safe artifact path validation failed.")
+
+        with self._regeneration_lock:
+            try:
+                results = export_erd(model, destination_root, options)
+            except (OSError, ValueError):
+                raise ApiProblem(
+                    422,
+                    "DBML_REGENERATION_FAILED",
+                    "DBML regeneration could not be completed safely.",
+                ) from None
+
+            generated_paths = {result.path.resolve() for result in results}
+            if not generated_paths or any(
+                not path.is_file() or not path.is_relative_to(erd_root) for path in generated_paths
+            ):
+                raise ApiProblem(
+                    500,
+                    "UNSAFE_ARTIFACT_PATH",
+                    "Generated DBML failed safe artifact validation.",
+                )
+            manifest = self._manifest(completed)
+
+        generated_ids = tuple(
+            artifact_id
+            for artifact_id, item in manifest.items()
+            if item.path.resolve() in generated_paths
+        )
+        if len(generated_ids) != len(generated_paths):
+            raise ApiProblem(
+                500,
+                "ARTIFACT_MANIFEST_FAILED",
+                "Generated DBML could not be added to the safe artifact manifest.",
+            )
+        return DbmlRegenerationResponse(
+            run_id=run_id,
+            generated_artifact_ids=generated_ids,
             artifacts=tuple(item.metadata for item in manifest.values()),
         )
 
@@ -117,6 +231,22 @@ class ArtifactService:
                 min_confidence=(metadata_values or {}).get(
                     "min_confidence", completed.erd_min_confidence
                 ),
+                input_relationships=(metadata_values or {}).get("input_relationships"),
+                duplicate_relationships_omitted=(metadata_values or {}).get(
+                    "duplicate_relationships_omitted"
+                ),
+                highest_detected_confidence=(metadata_values or {}).get(
+                    "highest_detected_confidence"
+                ),
+                below_confidence_threshold=(metadata_values or {}).get(
+                    "below_confidence_threshold"
+                ),
+                omitted_by_validation_filter=(metadata_values or {}).get(
+                    "omitted_by_validation_filter"
+                ),
+                omitted_by_scope_filter=(metadata_values or {}).get("omitted_by_scope_filter"),
+                omitted_by_generic_filter=(metadata_values or {}).get("omitted_by_generic_filter"),
+                omitted_by_limit=(metadata_values or {}).get("omitted_by_limit"),
                 eligible_relationships=(metadata_values or {}).get("eligible_relationships"),
                 rendered_relationships=(metadata_values or {}).get("rendered_relationships"),
                 unknown_cardinality_omitted=(metadata_values or {}).get(
@@ -187,14 +317,14 @@ def _valid_html(path: Path) -> bool:
         return False
 
 
-def _dbml_metadata(path: Path) -> dict[str, str | float | int] | None:
+def _dbml_metadata(path: Path) -> dict[str, str | float | int | None] | None:
     try:
         if path.stat().st_size <= 0:
             return None
         prefix = _read_prefix(path)
         if "Generated by ReliFinder" not in prefix or "Project ReliFinder_ERD" not in prefix:
             return None
-        values: dict[str, str | float | int] = {}
+        values: dict[str, str | float | int | None] = {}
         for label, key in _DBML_FIELDS.items():
             match = re.search(rf"^// {re.escape(label)}:\s*(.+)$", prefix, re.MULTILINE)
             if not match:
@@ -202,8 +332,8 @@ def _dbml_metadata(path: Path) -> dict[str, str | float | int] | None:
             raw = match.group(1).strip()
             if key == "scope":
                 values[key] = raw
-            elif key == "min_confidence":
-                values[key] = float(raw)
+            elif key in {"min_confidence", "highest_detected_confidence"}:
+                values[key] = None if raw == "none" else float(raw)
             else:
                 values[key] = int(raw)
         return values

@@ -102,6 +102,18 @@ class ErdExportOptions:
 
 
 @dataclass(frozen=True, slots=True)
+class ErdExportDiagnostics:
+    input_relationships: int
+    duplicate_relationships_omitted: int
+    highest_detected_confidence: float | None
+    below_confidence_threshold: int
+    omitted_by_validation_filter: int
+    omitted_by_scope_filter: int
+    omitted_by_generic_filter: int
+    omitted_by_limit: int
+
+
+@dataclass(frozen=True, slots=True)
 class ErdExportResult:
     path: Path
     format: str
@@ -111,9 +123,13 @@ class ErdExportResult:
     validation_statuses: tuple[str, ...] = DEFAULT_ERD_VALIDATION_STATUSES
     input_relationships: int = 0
     duplicate_relationships_omitted: int = 0
+    highest_detected_confidence: float | None = None
+    below_confidence_threshold: int = 0
     confidence_qualified_relationships: int = 0
     validation_qualified_relationships: int = 0
     omitted_by_validation_filter: int = 0
+    omitted_by_scope_filter: int = 0
+    omitted_by_generic_filter: int = 0
     omitted_by_limit: int = 0
     unknown_cardinality_relationships: int = 0
     rendered_relationships: int = 0
@@ -139,4 +155,5 @@ class ErdExporter(Protocol):
         options: ErdExportOptions,
         *,
         external_to_schema: str | None = None,
+        diagnostics: ErdExportDiagnostics | None = None,
     ) -> int: ...

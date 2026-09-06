@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Iterable
 
-from oracle_relationship_discovery.analysis.datatype import compare_datatypes, datatype_family
+from oracle_relationship_discovery.analysis.datatype import compare_datatypes
 from oracle_relationship_discovery.analysis.name_similarity import (
     compare_names,
     is_identifier_like,
@@ -45,7 +45,7 @@ def generate_candidates(
             continue  # Never treat one composite-key component as a complete unique target.
         if not (target.is_single_column_key or is_identifier_like(target.name)):
             continue
-        family = datatype_family(target.data_type)
+        family = target.data_type_family
         keys = {semantic_root(target.name), semantic_root(target.table), target.name.upper()}
         for key in filter(None, keys):
             target_index[(family, key)].append(target)
@@ -54,7 +54,7 @@ def generate_candidates(
     for source in columns:
         if not is_identifier_like(source.name):
             continue
-        family = datatype_family(source.data_type)
+        family = source.data_type_family
         lookup_keys = {semantic_root(source.name), source.name.upper()}
         possible: dict[str, ColumnMetadata] = {}
         for key in filter(None, lookup_keys):

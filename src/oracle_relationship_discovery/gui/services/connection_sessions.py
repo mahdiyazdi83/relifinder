@@ -5,15 +5,9 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Protocol
 
+from oracle_relationship_discovery.database.base import RuntimeResource
 from oracle_relationship_discovery.models import SchemaSummary
-
-
-class RuntimeResource(Protocol):
-    def acquire(self, timeout_seconds: int) -> Any: ...
-
-    def close(self) -> None: ...
 
 
 @dataclass(slots=True)

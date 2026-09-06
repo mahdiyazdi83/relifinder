@@ -7,6 +7,11 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
+from oracle_relationship_discovery.database.types import (
+    DatatypeFamily,
+    classify_native_datatype,
+)
+
 
 class KeyType(str, Enum):
     PRIMARY = "PRIMARY_KEY"
@@ -38,6 +43,15 @@ class ColumnMetadata:
     composite_constraints: tuple[str, ...] = ()
     num_distinct: int | None = None
     num_nulls: int | None = None
+    data_type_family: DatatypeFamily | None = None
+
+    def __post_init__(self) -> None:
+        family = self.data_type_family
+        if family is None:
+            family = classify_native_datatype(self.data_type)
+        elif not isinstance(family, DatatypeFamily):
+            family = DatatypeFamily(str(family).upper())
+        object.__setattr__(self, "data_type_family", family)
 
     @property
     def qualified_name(self) -> str:

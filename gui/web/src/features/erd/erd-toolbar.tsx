@@ -53,6 +53,7 @@ export function ErdToolbar({
             value={filters.minConfidence}
           />
         </label>
+        <span className="font-mono text-[10px] text-text-muted">Visualization filter only</span>
         <label>
           <span className="sr-only">ERD validation status</span>
           <select

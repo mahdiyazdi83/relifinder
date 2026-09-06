@@ -6,6 +6,7 @@ import {
   FileCode2,
   FileSpreadsheet,
   Network,
+  RefreshCw,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -15,7 +16,7 @@ import { toDisplayMessage } from "../../api/errors";
 import { ActivityIndicator } from "../../components/ui/activity-indicator";
 import { useWorkspaceStore } from "../workspace/workspace-store";
 import { DbmlCodeViewer } from "./dbml-code-viewer";
-import { useArtifacts } from "./export-api";
+import { useArtifacts, useRegenerateDbml } from "./export-api";
 
 export function ExportsPage() {
   const [searchParams] = useSearchParams();
@@ -27,6 +28,11 @@ export function ExportsPage() {
     [artifactsQuery.data],
   );
   const [selectedDbmlId, setSelectedDbmlId] = useState<string | null>(null);
+  const selectedDbml = dbmlArtifacts.find((item) => item.id === selectedDbmlId) ?? dbmlArtifacts[0];
+  const [regenerationThreshold, setRegenerationThreshold] = useState<number | null>(null);
+  const effectiveRegenerationThreshold =
+    regenerationThreshold ?? selectedDbml?.min_confidence ?? null;
+  const regeneration = useRegenerateDbml(runId);
 
   useEffect(() => {
     if (runId && artifactsQuery.data) adoptCompletedRun(runId);
@@ -49,8 +55,6 @@ export function ExportsPage() {
   }
 
   const artifacts = artifactsQuery.data!.artifacts;
-  const selectedDbml = dbmlArtifacts.find((item) => item.id === selectedDbmlId) ?? dbmlArtifacts[0];
-
   return (
     <section className="mx-auto max-w-6xl px-5 py-6 lg:px-8" aria-labelledby="exports-title">
       <header className="flex flex-wrap items-end gap-3 border-b border-border pb-4">
@@ -108,11 +112,71 @@ export function ExportsPage() {
             {dbmlArtifacts.map((artifact) => (
               <option key={artifact.id} value={artifact.id}>
                 {artifact.filename}
+                {artifact.min_confidence != null
+                  ? ` · confidence ≥ ${artifact.min_confidence}`
+                  : ""}
               </option>
             ))}
           </select>
         </label>
       ) : null}
+
+      <section
+        aria-labelledby="dbml-regeneration-title"
+        className="mt-4 flex flex-wrap items-end gap-3 border border-border bg-surface px-4 py-3"
+      >
+        <div>
+          <h2
+            className="text-xs font-semibold uppercase tracking-wider text-text-muted"
+            id="dbml-regeneration-title"
+          >
+            Regenerate from completed-run artifacts
+          </h2>
+          <p className="mt-1 text-[11px] text-text-muted">
+            Offline and deterministic · preserves the run scope and safe cardinality rules
+          </p>
+        </div>
+        <label className="ml-auto text-xs text-text-muted">
+          Minimum confidence
+          <input
+            aria-label="DBML minimum confidence"
+            className="ml-2 h-8 w-20 border border-border bg-background px-2 text-right font-mono text-text"
+            max={100}
+            min={0}
+            onChange={(event) => setRegenerationThreshold(Number(event.target.value))}
+            type="number"
+            value={effectiveRegenerationThreshold ?? ""}
+          />
+        </label>
+        <button
+          className="inline-flex h-8 items-center gap-2 border border-accent px-3 text-xs text-accent hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={
+            regeneration.isPending ||
+            effectiveRegenerationThreshold == null ||
+            effectiveRegenerationThreshold < 0 ||
+            effectiveRegenerationThreshold > 100
+          }
+          onClick={() => {
+            if (effectiveRegenerationThreshold == null) return;
+            regeneration.mutate(effectiveRegenerationThreshold, {
+              onSuccess: (response) =>
+                setSelectedDbmlId(response.generated_artifact_ids[0] ?? null),
+            });
+          }}
+          type="button"
+        >
+          <RefreshCw
+            aria-hidden="true"
+            className={`size-3.5 ${regeneration.isPending ? "animate-spin" : ""}`}
+          />
+          {regeneration.isPending ? "Regenerating…" : "Regenerate DBML"}
+        </button>
+        {regeneration.isError ? (
+          <p className="basis-full text-xs text-danger" role="alert">
+            {toDisplayMessage(regeneration.error)}
+          </p>
+        ) : null}
+      </section>
 
       <div className="mt-4">
         {selectedDbml ? (
@@ -127,29 +191,8 @@ export function ExportsPage() {
 
       {selectedDbml?.available ? (
         <aside className="mt-4 border-l-2 border-warning bg-warning/8 px-4 py-3 text-xs leading-5 text-text-muted">
-          <p>
-            This DBML reflects the run-generated <b>{selectedDbml.scope ?? "configured"}</b> scope
-            {selectedDbml.min_confidence != null ? (
-              <>
-                {" "}
-                at minimum confidence <b>{selectedDbml.min_confidence}</b>
-              </>
-            ) : null}
-            , not the current transient GUI filter.
-          </p>
-          {selectedDbml.rendered_relationships != null ? (
-            <p className="mt-1">
-              DBML references: {selectedDbml.rendered_relationships.toLocaleString()}
-              {selectedDbml.unknown_cardinality_omitted != null ? (
-                <>
-                  {" "}
-                  - Unknown-cardinality relationships omitted:{" "}
-                  {selectedDbml.unknown_cardinality_omitted.toLocaleString()}
-                </>
-              ) : null}
-            </p>
-          ) : null}
-          <p className="mt-2">
+          <DbmlDiagnostics artifact={selectedDbml} />
+          <p className="mt-3">
             External service privacy: ReliFinder never uploads DBML automatically. Copy it, then
             explicitly open dbdiagram and import it yourself.
           </p>
@@ -163,7 +206,6 @@ export function ExportsPage() {
           </a>
         </aside>
       ) : null}
-
       <Link
         className="mt-4 inline-flex items-center gap-2 text-sm text-text-muted hover:text-text"
         to={`/results?run=${encodeURIComponent(runId)}`}
@@ -174,6 +216,55 @@ export function ExportsPage() {
   );
 }
 
+function DbmlDiagnostics({ artifact }: { artifact: ArtifactMetadata }) {
+  const empty = artifact.rendered_relationships === 0;
+  const noEligible = artifact.eligible_relationships === 0;
+  const diagnostics = [
+    ["Export threshold", artifact.min_confidence],
+    ["Highest detected confidence", artifact.highest_detected_confidence],
+    ["Eligible after filters / limit", artifact.eligible_relationships],
+    ["Below threshold", artifact.below_confidence_threshold],
+    ["Validation-status filter omitted", artifact.omitted_by_validation_filter],
+    ["Scope filter omitted", artifact.omitted_by_scope_filter],
+    ["Generic filter omitted", artifact.omitted_by_generic_filter],
+    ["Max-relations limit omitted", artifact.omitted_by_limit],
+    ["Unknown cardinality omitted", artifact.unknown_cardinality_omitted],
+    ["Rendered DBML references", artifact.rendered_relationships],
+  ] as const;
+
+  return (
+    <div>
+      {empty ? (
+        <div className="mb-3 border border-warning/40 bg-background/50 px-3 py-2">
+          <p className="font-medium text-text">
+            {noEligible
+              ? "No relationships qualified for this DBML export."
+              : "No relationships could be represented safely in this DBML export."}
+          </p>
+          <p className="mt-1">
+            {noEligible
+              ? "The export filters excluded every detected relationship. Compare the threshold with the highest detected confidence below."
+              : "Eligible relationships were retained as evidence comments, but unknown cardinality was omitted because DBML has no neutral relationship operator."}
+          </p>
+        </div>
+      ) : null}
+      <p>
+        This DBML reflects the run-generated <b>{artifact.scope ?? "configured"}</b> scope, not the
+        current transient GUI filter.
+      </p>
+      <dl className="mt-2 grid gap-x-5 gap-y-1 sm:grid-cols-2">
+        {diagnostics.map(([label, value]) =>
+          value == null ? null : (
+            <div className="flex justify-between gap-3 border-b border-border/60 py-1" key={label}>
+              <dt>{label}</dt>
+              <dd className="font-mono text-text">{value.toLocaleString()}</dd>
+            </div>
+          ),
+        )}
+      </dl>
+    </div>
+  );
+}
 function ArtifactRow({ artifact, runId }: { artifact: ArtifactMetadata; runId: string }) {
   const Icon = artifact.type === "csv" ? FileSpreadsheet : FileCode2;
   return (

@@ -9,14 +9,12 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from threading import Event
-from typing import Any
 
 from oracle_relationship_discovery.analysis.candidate_generator import generate_candidates
 from oracle_relationship_discovery.analysis.relationship_validator import validate_candidates
 from oracle_relationship_discovery.config import AppConfig
-from oracle_relationship_discovery.db.connection import connection_pool
-from oracle_relationship_discovery.db.data_sampler import OracleDataSampler
-from oracle_relationship_discovery.db.metadata_repository import MetadataRepository
+from oracle_relationship_discovery.database.base import ConnectionFactory, DatabaseAdapter
+from oracle_relationship_discovery.database.factory import adapter_for
 from oracle_relationship_discovery.models import AnalysisStats, ValidationStatus
 from oracle_relationship_discovery.output.analysis_results import write_analysis_results
 from oracle_relationship_discovery.output.csv_report import write_csv
@@ -76,7 +74,6 @@ class CancellationToken:
 
 
 ProgressCallback = Callable[[AnalysisProgress], None]
-ConnectionFactory = Callable[[], Any]
 
 
 def run_analysis(
@@ -86,15 +83,17 @@ def run_analysis(
     acquire_connection: ConnectionFactory | None = None,
     progress_callback: ProgressCallback | None = None,
     cancellation_token: CancellationToken | None = None,
+    database_adapter: DatabaseAdapter | None = None,
     generated_at: str,
 ) -> AnalysisResult:
     """Execute the same real pipeline for CLI and GUI callers."""
     token = cancellation_token or CancellationToken()
     started = time.monotonic()
     run_directory.mkdir(parents=True, exist_ok=True)
+    adapter = database_adapter or adapter_for(config.database)
 
     if acquire_connection is None:
-        with connection_pool(
+        with adapter.connection_pool(
             config.database,
             config.performance.query_timeout_seconds,
             config.performance.max_workers,
@@ -105,6 +104,7 @@ def run_analysis(
                 acquire_connection=pooled_acquire,
                 progress_callback=progress_callback,
                 cancellation_token=token,
+                database_adapter=adapter,
                 generated_at=generated_at,
             )
 
@@ -120,16 +120,20 @@ def run_analysis(
             progress_callback(AnalysisProgress(phase, message, current, total, stats))
 
     token.raise_if_cancelled()
-    emit(AnalysisPhase.READING_METADATA, "Reading Oracle metadata")
+    emit(AnalysisPhase.READING_METADATA, f"Reading {adapter.display_name} metadata")
     with acquire_connection() as connection:
-        tables = MetadataRepository(connection).load(config.schemas)
+        tables = adapter.metadata_reader(connection).load(config.schemas)
     columns = sum(len(table.columns) for table in tables)
     metadata_stats = {
         "schemas": len({table.schema for table in tables}),
         "tables": len(tables),
         "columns": columns,
     }
-    emit(AnalysisPhase.READING_METADATA, "Oracle metadata loaded", stats=metadata_stats)
+    emit(
+        AnalysisPhase.READING_METADATA,
+        f"{adapter.display_name} metadata loaded",
+        stats=metadata_stats,
+    )
 
     token.raise_if_cancelled()
     emit(
@@ -177,7 +181,7 @@ def run_analysis(
                 stats=candidate_stats,
             )
 
-    sampler_factory = lambda: OracleDataSampler(acquire_connection, config.sampling)
+    sampler_factory = lambda: adapter.candidate_sampler(acquire_connection, config.sampling)
     candidates, skipped_by_limit = validate_candidates(
         candidates,
         sampler_factory,

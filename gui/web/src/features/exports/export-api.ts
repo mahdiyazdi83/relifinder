@@ -1,6 +1,11 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { getArtifacts, getArtifactText } from "../../api/client";
+import {
+  getArtifacts,
+  getArtifactText,
+  regenerateDbml,
+  type DbmlRegenerationResponse,
+} from "../../api/client";
 import { ApiRequestError } from "../../api/errors";
 
 export function useArtifacts(runId: string | null) {
@@ -9,6 +14,21 @@ export function useArtifacts(runId: string | null) {
     queryFn: ({ signal }) => getArtifacts(runId!, signal),
     enabled: Boolean(runId),
     retry: retryTransient,
+  });
+}
+
+export function useRegenerateDbml(runId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (minConfidence: number) =>
+      regenerateDbml(runId!, { min_confidence: minConfidence }),
+    onSuccess: (response: DbmlRegenerationResponse) => {
+      queryClient.setQueryData(["artifacts", runId], {
+        run_id: response.run_id,
+        artifacts: response.artifacts,
+      });
+      void queryClient.invalidateQueries({ queryKey: ["artifact-text", runId] });
+    },
   });
 }
 

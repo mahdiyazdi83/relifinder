@@ -132,19 +132,26 @@ All screenshots below use synthetic demo metadata and fake connection details. N
 
 ```mermaid
 flowchart LR
-    A[Oracle ALL_* metadata] --> B[Normalize names and datatypes]
-    B --> C[Generate indexed candidates]
-    C --> D{Metadata threshold}
-    D -->|Below| E[Discard cheaply]
-    D -->|Pass| F[Optional bounded sample]
-    F --> G[Batched target lookup]
-    G --> H[Overlap and uniqueness evidence]
-    H --> I[Score and cardinality]
-    I --> J[GUI + CSV + HTML + JSON]
-    I --> K[DBML ERD]
+    A[Analysis engine] --> B[DatabaseAdapter]
+    B --> C[OracleAdapter]
+    C --> D[Oracle ALL_* metadata + bounded sampling]
+    D --> E[Canonical metadata and datatype families]
+    E --> F[Generate indexed candidates]
+    F --> G{Metadata threshold}
+    G -->|Below| H[Discard cheaply]
+    G -->|Pass| I[Optional bounded sample]
+    I --> J[Batched target lookup]
+    J --> K[Overlap and uniqueness evidence]
+    K --> L[Score and cardinality]
+    L --> M[GUI + CSV + HTML + JSON]
+    L --> N[DBML ERD]
 ```
 
-1. **Metadata collection** reads table, column, datatype, nullability, constraint, row-estimate, and statistics metadata.
+The analysis engine depends on a small database-neutral adapter contract. Oracle remains the only
+supported provider and the only GUI connection type; its driver, ALL_* queries, identifier rules,
+sampling SQL, timeout handling, and error classification live behind OracleAdapter.
+
+1. **Metadata collection** reads table, column, native datatype, canonical datatype family, nullability, constraint, row-estimate, and statistics metadata.
 2. **Candidate generation** uses datatype families and normalized identifier semantics instead of comparing every possible column pair.
 3. **Safe validation** optionally samples a bounded number of non-null source values and checks target existence with bind variables.
 4. **Scoring and cardinality** combine metadata strength, overlap quality, uniqueness, and structural evidence.

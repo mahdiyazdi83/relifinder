@@ -36,6 +36,14 @@ const completeArtifacts: ArtifactListResponse = {
       size_bytes: dbml.length,
       scope: "full",
       min_confidence: 80,
+      input_relationships: 30,
+      duplicate_relationships_omitted: 0,
+      highest_detected_confidence: 92.5,
+      below_confidence_threshold: 24,
+      omitted_by_validation_filter: 0,
+      omitted_by_scope_filter: 0,
+      omitted_by_generic_filter: 0,
+      omitted_by_limit: 1,
       eligible_relationships: 5,
       rendered_relationships: 4,
       unknown_cardinality_omitted: 1,
@@ -101,8 +109,8 @@ describe("completed-run exports", () => {
           element.textContent?.includes("Project ReliFinder_ERD {") === true,
       ),
     ).toBeInTheDocument();
-    expect(screen.getByText(/DBML references: 4/)).toBeInTheDocument();
-    expect(screen.getByText(/Unknown-cardinality relationships omitted: 1/)).toBeInTheDocument();
+    expect(screen.getByText("Rendered DBML references").nextSibling).toHaveTextContent("4");
+    expect(screen.getByText("Unknown cardinality omitted").nextSibling).toHaveTextContent("1");
     expect(screen.getByText(/not the current transient GUI filter/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open dbdiagram" })).toHaveAttribute(
       "href",
@@ -114,6 +122,90 @@ describe("completed-run exports", () => {
     );
   });
 
+  it("explains an empty DBML with authoritative threshold diagnostics", async () => {
+    const emptyArtifacts: ArtifactListResponse = {
+      ...completeArtifacts,
+      artifacts: completeArtifacts.artifacts.map((artifact) =>
+        artifact.type === "dbml"
+          ? {
+              ...artifact,
+              min_confidence: 80,
+              highest_detected_confidence: 55.04,
+              below_confidence_threshold: 30,
+              eligible_relationships: 0,
+              rendered_relationships: 0,
+              unknown_cardinality_omitted: 0,
+            }
+          : artifact,
+      ),
+    };
+    installApi(emptyArtifacts);
+    renderExports();
+
+    expect(
+      await screen.findByText("No relationships qualified for this DBML export."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Highest detected confidence").nextSibling).toHaveTextContent("55.04");
+    expect(screen.getByText("Below threshold").nextSibling).toHaveTextContent("30");
+    expect(screen.getByText("Unknown cardinality omitted").nextSibling).toHaveTextContent("0");
+  });
+
+  it("regenerates DBML from completed artifacts and refreshes preview and download", async () => {
+    const user = userEvent.setup();
+    const regeneratedDbml = "// Minimum confidence: 40\nProject ReliFinder_ERD {\n}\n";
+    const generated = {
+      ...completeArtifacts.artifacts[2]!,
+      id: "erd-dbml-regenerated",
+      filename: "full.dbml",
+      min_confidence: 40,
+      size_bytes: regeneratedDbml.length,
+      eligible_relationships: 16,
+      rendered_relationships: 8,
+      unknown_cardinality_omitted: 8,
+    };
+    let posted: unknown;
+    installApi();
+    server.use(
+      http.post("/api/runs/:runId/exports/dbml", async ({ request }) => {
+        posted = await request.json();
+        return HttpResponse.json({
+          run_id: runId,
+          generated_artifact_ids: [generated.id],
+          artifacts: [...completeArtifacts.artifacts, generated],
+        });
+      }),
+      http.get(
+        "/api/runs/:runId/artifacts/erd-dbml-regenerated",
+        () =>
+          new HttpResponse(regeneratedDbml, {
+            headers: {
+              "Content-Length": String(regeneratedDbml.length),
+              "Content-Type": "text/plain",
+            },
+          }),
+      ),
+    );
+    renderExports();
+    await screen.findByRole("heading", { name: "DBML Code" });
+
+    const threshold = screen.getByLabelText("DBML minimum confidence");
+    await user.clear(threshold);
+    await user.type(threshold, "40");
+    await user.click(screen.getByRole("button", { name: "Regenerate DBML" }));
+
+    expect(
+      await screen.findByText(
+        (_content, element) =>
+          element?.tagName === "CODE" &&
+          element.textContent?.includes("Minimum confidence: 40") === true,
+      ),
+    ).toBeInTheDocument();
+    expect(posted).toEqual({ min_confidence: 40 });
+    expect(screen.getAllByRole("link", { name: "Download DBML" }).at(-1)).toHaveAttribute(
+      "href",
+      `/api/runs/${runId}/artifacts/${generated.id}?download=true`,
+    );
+  });
   it("copies DBML only after explicit user action", async () => {
     const user = userEvent.setup();
     const writeText = vi.fn().mockResolvedValue(undefined);

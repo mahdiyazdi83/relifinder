@@ -191,6 +191,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/runs/{run_id}/exports/dbml": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Regenerate Dbml */
+        post: operations["regenerate_dbml_api_runs__run_id__exports_dbml_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/runs/{run_id}/relationships": {
         parameters: {
             query?: never;
@@ -328,14 +345,30 @@ export interface components {
         ArtifactMetadata: {
             /** Available */
             available: boolean;
+            /** Below Confidence Threshold */
+            below_confidence_threshold?: number | null;
+            /** Duplicate Relationships Omitted */
+            duplicate_relationships_omitted?: number | null;
             /** Eligible Relationships */
             eligible_relationships?: number | null;
             /** Filename */
             filename: string;
+            /** Highest Detected Confidence */
+            highest_detected_confidence?: number | null;
             /** Id */
             id: string;
+            /** Input Relationships */
+            input_relationships?: number | null;
             /** Min Confidence */
             min_confidence?: number | null;
+            /** Omitted By Generic Filter */
+            omitted_by_generic_filter?: number | null;
+            /** Omitted By Limit */
+            omitted_by_limit?: number | null;
+            /** Omitted By Scope Filter */
+            omitted_by_scope_filter?: number | null;
+            /** Omitted By Validation Filter */
+            omitted_by_validation_filter?: number | null;
             /** Rendered Relationships */
             rendered_relationships?: number | null;
             /** Scope */
@@ -401,6 +434,20 @@ export interface components {
              * @constant
              */
             status: "connected";
+        };
+        /** DbmlRegenerationRequest */
+        DbmlRegenerationRequest: {
+            /** Min Confidence */
+            min_confidence: number;
+        };
+        /** DbmlRegenerationResponse */
+        DbmlRegenerationResponse: {
+            /** Artifacts */
+            artifacts: components["schemas"]["ArtifactMetadata"][];
+            /** Generated Artifact Ids */
+            generated_artifact_ids: string[];
+            /** Run Id */
+            run_id: string;
         };
         /** ErdGraphColumn */
         ErdGraphColumn: {
@@ -1068,6 +1115,15 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
         };
     };
     get_artifact_api_runs__run_id__artifacts__artifact_id__get: {
@@ -1111,6 +1167,15 @@ export interface operations {
             };
             /** @description Unprocessable Content */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1267,6 +1332,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    regenerate_dbml_api_runs__run_id__exports_dbml_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DbmlRegenerationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DbmlRegenerationResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
         };

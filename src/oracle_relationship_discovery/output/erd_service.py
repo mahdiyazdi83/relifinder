@@ -16,6 +16,7 @@ from oracle_relationship_discovery.output.dbml_exporter import (
     DbmlExporter,
 )
 from oracle_relationship_discovery.output.erd_models import (
+    ErdExportDiagnostics,
     ErdExportOptions,
     ErdExportResult,
     ErdModel,
@@ -32,10 +33,14 @@ class _Selection:
     model: ErdModel
     input_relationships: int
     duplicate_relationships_omitted: int
+    highest_detected_confidence: float | None
+    below_confidence_threshold: int
     confidence_qualified: int
     validation_qualified: int
     eligible: int
     omitted_by_validation: int
+    omitted_by_scope: int
+    omitted_by_generic: int
     omitted_by_limit: int
     isolated_tables_included: int
 
@@ -97,6 +102,10 @@ def _select(
     schema: str | None = None,
 ) -> _Selection:
     relationships, duplicate_count = _deduplicate(model.relationships)
+    highest_confidence = max(
+        (item.confidence_score for item in relationships),
+        default=None,
+    )
     confidence = tuple(
         item for item in relationships if item.confidence_score >= options.min_confidence
     )
@@ -117,11 +126,15 @@ def _select(
         scoped = tuple(
             item for item in scoped if item.source_schema == schema or item.target_schema == schema
         )
+    omitted_by_scope = len(validation) - len(scoped)
+
+    generic_filtered = scoped
     if options.exclude_generic:
         entities = {item.upper() for item in options.generic_entities}
-        scoped = tuple(item for item in scoped if not _generic(item, entities))
+        generic_filtered = tuple(item for item in scoped if not _generic(item, entities))
+    omitted_by_generic = len(scoped) - len(generic_filtered)
 
-    ordered = tuple(sorted(scoped, key=_relationship_sort_key))
+    ordered = tuple(sorted(generic_filtered, key=_relationship_sort_key))
     eligible_count = len(ordered)
     omitted_by_limit = 0
     if options.max_relationships is not None:
@@ -153,10 +166,14 @@ def _select(
         model=ErdModel(tables, ordered),
         input_relationships=len(model.relationships),
         duplicate_relationships_omitted=duplicate_count,
+        highest_detected_confidence=highest_confidence,
+        below_confidence_threshold=len(relationships) - len(confidence),
         confidence_qualified=len(confidence),
         validation_qualified=len(validation),
         eligible=eligible_count,
         omitted_by_validation=len(confidence) - len(validation),
+        omitted_by_scope=omitted_by_scope,
+        omitted_by_generic=omitted_by_generic,
         omitted_by_limit=omitted_by_limit,
         isolated_tables_included=isolated_count,
     )
@@ -205,6 +222,16 @@ def export_erd(
             path,
             options,
             external_to_schema=schema,
+            diagnostics=ErdExportDiagnostics(
+                input_relationships=selection.input_relationships,
+                duplicate_relationships_omitted=selection.duplicate_relationships_omitted,
+                highest_detected_confidence=selection.highest_detected_confidence,
+                below_confidence_threshold=selection.below_confidence_threshold,
+                omitted_by_validation_filter=selection.omitted_by_validation,
+                omitted_by_scope_filter=selection.omitted_by_scope,
+                omitted_by_generic_filter=selection.omitted_by_generic,
+                omitted_by_limit=selection.omitted_by_limit,
+            ),
         )
         rendered_count = len(selection.model.relationships) - unknown_count
         result = ErdExportResult(
@@ -215,10 +242,14 @@ def export_erd(
             validation_statuses=options.validation_statuses,
             input_relationships=selection.input_relationships,
             duplicate_relationships_omitted=selection.duplicate_relationships_omitted,
+            highest_detected_confidence=selection.highest_detected_confidence,
+            below_confidence_threshold=selection.below_confidence_threshold,
             confidence_qualified_relationships=selection.confidence_qualified,
             validation_qualified_relationships=selection.validation_qualified,
             eligible_relationships=selection.eligible,
             omitted_by_validation_filter=selection.omitted_by_validation,
+            omitted_by_scope_filter=selection.omitted_by_scope,
+            omitted_by_generic_filter=selection.omitted_by_generic,
             omitted_by_limit=selection.omitted_by_limit,
             unknown_cardinality_relationships=unknown_count,
             rendered_relationships=rendered_count,
