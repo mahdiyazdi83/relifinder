@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from oracle_relationship_discovery.gui.schemas.relationships import RelationshipListItem
@@ -24,6 +26,7 @@ class ErdGraphTable(BaseModel):
 
 class ErdGraphResponse(BaseModel):
     run_id: str
+    database_type: Literal["oracle", "postgresql", "mysql", "mariadb"]
     default_min_confidence: float = Field(ge=0, le=100)
     schemas: tuple[str, ...]
     tables: tuple[ErdGraphTable, ...]

@@ -9,6 +9,7 @@ export function erdFixture(): ErdGraphResponse {
   ];
   return {
     run_id: "erd-test-run",
+    database_type: "oracle",
     default_min_confidence: 60,
     schemas: ["APP", "CORE"],
     tables,
@@ -52,6 +53,7 @@ export function stressGraph(tableCount: number, edgeCount: number): ErdGraphResp
   });
   return {
     run_id: `stress-${tableCount}-${edgeCount}`,
+    database_type: "postgresql",
     default_min_confidence: 0,
     schemas: [...new Set(tables.map((item) => item.schema_name))],
     tables,

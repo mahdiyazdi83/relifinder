@@ -130,6 +130,7 @@ class RelationshipResultsService:
             )
             graph = ErdGraphResponse(
                 run_id=run_id,
+                database_type=cached.completed.database_type,
                 default_min_confidence=cached.completed.erd_min_confidence,
                 schemas=tuple(sorted({table.schema_name for table in tables})),
                 tables=tables,

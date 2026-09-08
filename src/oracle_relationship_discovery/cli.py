@@ -81,7 +81,7 @@ def _add_erd_arguments(parser: argparse.ArgumentParser, *, analyze: bool) -> Non
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Discover probable logical Oracle relationships safely"
+        description="Discover probable logical database relationships safely"
     )
     parser.add_argument(
         "--config",
@@ -104,7 +104,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     offline = subparsers.add_parser(
         "export-erd",
-        help="Export DBML from an existing ReliFinder run without connecting to Oracle",
+        help="Export DBML from an existing ReliFinder run without connecting to the source database",
     )
     offline.add_argument(
         "--input",

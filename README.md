@@ -2,12 +2,12 @@
 
 # 🔎 ReliFinder
 
-### Discover the relationships your Oracle schema forgot to declare
+### Discover the relationships your database forgot to declare
 
-Local-first Oracle schema relationship discovery workbench with explainable inference, safe sampling, interactive ERD, and zero database writes.
+Local-first relationship discovery for Oracle, PostgreSQL, MySQL, and MariaDB—with explainable inference, bounded sampling, interactive ERD, and zero database writes.
 
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Oracle](https://img.shields.io/badge/Oracle-read--only-F80000?logo=oracle&logoColor=white)](https://www.oracle.com/database/)
+[![Databases](https://img.shields.io/badge/DB-Oracle%20%7C%20PostgreSQL%20%7C%20MySQL%20%7C%20MariaDB-2563EB)](#supported-databases)
 [![FastAPI](https://img.shields.io/badge/FastAPI-local_API-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![React](https://img.shields.io/badge/React-workbench-149ECA?logo=react&logoColor=white)](https://react.dev/)
 [![CI](https://github.com/mahdiyazdi83/relifinder/actions/workflows/ci.yml/badge.svg)](https://github.com/mahdiyazdi83/relifinder/actions/workflows/ci.yml)
@@ -23,7 +23,7 @@ Local-first Oracle schema relationship discovery workbench with explainable infe
 
 ## What is ReliFinder?
 
-Oracle estates often contain real logical relationships that were never declared as Foreign Keys. ReliFinder analyzes metadata and, when enabled, small bounded samples to turn signals such as:
+Production databases often contain real logical relationships that were never declared as Foreign Keys. ReliFinder analyzes metadata and, when enabled, small bounded samples to turn signals such as:
 
 ```text
 SALES.ORDER.CUSTOMER_ID  →  CRM.CUSTOMER.ID
@@ -33,7 +33,7 @@ into reviewable relationship hypotheses. Every result includes a confidence scor
 
 ReliFinder is useful for:
 
-- reverse-engineering legacy or integration-heavy Oracle databases;
+- reverse-engineering legacy or integration-heavy databases;
 - preparing migrations and data-model documentation;
 - exploring cross-schema dependencies;
 - generating DBML and interactive ER diagrams;
@@ -47,8 +47,8 @@ ReliFinder is useful for:
 ### Requirements
 
 - Python 3.11+
-- network access to Oracle
-- a SELECT-only Oracle account with access to the required `ALL_*` metadata views
+- network access to a supported database
+- a physically read-only account that can inspect the provider metadata catalogs
 
 Normal GUI use does **not** require Node.js, pnpm, or a separate frontend server. Production web assets are included in the Python package.
 
@@ -95,7 +95,17 @@ python3 -m venv .venv
 ./.venv/bin/relifinder gui
 ```
 
-Loopback is the safe default. Binding to `0.0.0.0` or another non-loopback address can expose the workbench and its in-memory Oracle session to other machines; ReliFinder prints a warning when you do this.
+Install the driver extra for the database you use:
+
+```bash
+python -m pip install -e ".[gui,postgres]"   # PostgreSQL
+python -m pip install -e ".[gui,mysql]"      # MySQL or MariaDB
+python -m pip install -e ".[gui,databases]"  # all optional non-Oracle drivers
+```
+
+Oracle remains available in the default installation for backward compatibility. The historical
+`oracle-relationship-discovery` executable and the shorter `relifinder` executable are equivalent.
+Loopback is the safe default. Binding to `0.0.0.0` or another non-loopback address can expose the workbench and its in-memory database session to other machines; ReliFinder prints a warning when you do this.
 
 ## Screenshots
 
@@ -133,8 +143,8 @@ All screenshots below use synthetic demo metadata and fake connection details. N
 ```mermaid
 flowchart LR
     A[Analysis engine] --> B[DatabaseAdapter]
-    B --> C[OracleAdapter]
-    C --> D[Oracle ALL_* metadata + bounded sampling]
+    B --> C[Oracle / PostgreSQL / MySQL / MariaDB adapter]
+    C --> D[Provider catalogs + bounded sampling]
     D --> E[Canonical metadata and datatype families]
     E --> F[Generate indexed candidates]
     F --> G{Metadata threshold}
@@ -147,15 +157,27 @@ flowchart LR
     L --> N[DBML ERD]
 ```
 
-The analysis engine depends on a small database-neutral adapter contract. Oracle remains the only
-supported provider and the only GUI connection type; its driver, ALL_* queries, identifier rules,
-sampling SQL, timeout handling, and error classification live behind OracleAdapter.
+The analysis engine depends on a small database-neutral adapter contract. Each provider owns its
+driver, catalog queries, identifier quoting, bounded sampling SQL, timeout handling, and sanitized
+error mapping; candidate generation, scoring, cardinality, explanations, and reports stay shared.
+
+## Supported databases
+
+| Database | Metadata source | Bounded sample mode | Cross-schema scope |
+|---|---|---|---|
+| Oracle | `ALL_*` views | first rows or `SAMPLE BLOCK` | schemas visible to the same service/account |
+| PostgreSQL | `pg_catalog`, `information_schema`, `pg_stats` | first rows or `TABLESAMPLE SYSTEM` | schemas inside the connected database |
+| MySQL | `information_schema` | first rows with a hard limit | databases visible on the connected server |
+| MariaDB | `information_schema` | first rows with a hard limit | databases visible on the connected server |
+
+Cross-server relationships are not inferred. MySQL/MariaDB intentionally avoid random sorting and
+report no column distinct/null estimates when the catalogs cannot provide safe equivalents.
 
 1. **Metadata collection** reads table, column, native datatype, canonical datatype family, nullability, constraint, row-estimate, and statistics metadata.
 2. **Candidate generation** uses datatype families and normalized identifier semantics instead of comparing every possible column pair.
 3. **Safe validation** optionally samples a bounded number of non-null source values and checks target existence with bind variables.
 4. **Scoring and cardinality** combine metadata strength, overlap quality, uniqueness, and structural evidence.
-5. **Artifact generation** writes aggregate-only results that the GUI can inspect without another Oracle query.
+5. **Artifact generation** writes aggregate-only results that the GUI can inspect without another source-database query.
 
 ### Explainable confidence scoring
 
@@ -177,21 +199,21 @@ ReliFinder reduces false confidence when samples are small, a target repeats hea
 The workbench guides you through:
 
 1. connecting with temporary in-memory credentials;
-2. checking Oracle access and selecting visible schemas;
+2. checking database access and selecting visible schemas;
 3. choosing Fast, Balanced, Thorough, or Custom analysis settings;
 4. watching real progress and optionally cancelling at safe boundaries;
 5. filtering and inspecting relationship evidence;
 6. exploring the inferred model as an interactive ERD;
 7. viewing or downloading CSV, HTML, and DBML artifacts.
 
-Completed Results, ERD, and Export views read the completed run artifacts. They do not issue a second discovery query against Oracle.
+Completed Results, ERD, and Export views read the completed run artifacts. They do not issue a second discovery query against the source database.
 
 ## Safety model
 
 ReliFinder is designed around a narrow, read-only database boundary:
 
 - a central SQL guard accepts only a single `SELECT` statement;
-- metadata reads are limited to Oracle `ALL_*` views used by discovery;
+- metadata reads are limited to the provider catalogs used by discovery;
 - user-table validation is bounded by configured limits and client-side timeouts;
 - sampled values use bind variables and are never logged or persisted;
 - connection pools and validation workers have conservative fixed limits;
@@ -201,7 +223,7 @@ ReliFinder is designed around a narrow, read-only database boundary:
 ReliFinder never executes `INSERT`, `UPDATE`, `DELETE`, `MERGE`, `CREATE`, `ALTER`, `DROP`, `TRUNCATE`, statistics gathering, index creation, or temporary-table creation.
 
 > [!TIP]
-> Use an Oracle account whose privileges are physically limited to `SELECT` for defense in depth. Application safeguards do not prove that the supplied account lacks write privileges.
+> Use an account whose privileges are physically limited to read-only access for defense in depth. Application safeguards do not prove that the supplied account lacks write privileges.
 
 Credentials exist only long enough to create the local connection pool. They are not returned by the API, written to output, placed in URLs, or stored by ReliFinder in browser persistence. Theme preference is the only application value persisted in the browser.
 
@@ -209,7 +231,7 @@ Credentials exist only long enough to create the local connection pool. They are
 
 The original CLI remains fully supported. Install core-only dependencies with `python -m pip install -e .`, or use the GUI installation shown above.
 
-### Configure Oracle
+### Configure a database
 
 Copy the example and keep the real file local:
 
@@ -238,6 +260,20 @@ schemas:
   - CRM
 ```
 
+For PostgreSQL, MySQL, or MariaDB, select the provider and use `database` instead of
+`service_name`; schema names keep their catalog case:
+
+```yaml
+database:
+  type: postgresql        # or mysql / mariadb
+  host: localhost
+  port: 5432              # 3306 for MySQL/MariaDB
+  database: application_db
+  username: readonly_user
+  password_env: DATABASE_PASSWORD
+
+schemas: [public]
+```
 `config.yaml`, reports, logs, wallet files, and generated database artifacts are ignored by Git. Never put a password directly in a committed YAML file.
 
 ### Metadata-only analysis
@@ -274,7 +310,7 @@ oracle-relationship-discovery --config ./config.yaml analyze \
 
 ### Offline ERD export
 
-No Oracle connection is made when exporting from an existing run:
+No source database connection is made when exporting from an existing run:
 
 ```bash
 oracle-relationship-discovery export-erd \
@@ -328,7 +364,7 @@ relifinder gui
              shared Python analysis service
                          │
                          ▼
-              bounded SELECT-only Oracle pool
+          bounded read-only provider pool
 ```
 
 The CLI and GUI call the same Python analysis pipeline. FastAPI owns only local transport and in-memory lifecycle; candidate generation, scoring, validation, cardinality, and artifact generation remain in the core.
@@ -374,7 +410,7 @@ See [`config.example.yaml`](config.example.yaml) for the complete safe template.
 
 | Layer | Technology |
 |---|---|
-| Discovery engine | Python 3.11+, `python-oracledb`, PyYAML |
+| Discovery engine | Python 3.11+, `python-oracledb`, psycopg 3, PyMySQL, PyYAML |
 | Local API | FastAPI, Pydantic, Uvicorn |
 | Workbench | React 19, React Router, TanStack Query, Zod |
 | ERD | React Flow, ELK.js |
@@ -439,7 +475,7 @@ pnpm build
 pnpm test:e2e
 ```
 
-Python GUI tests replace the Oracle gateway and analysis executor; frontend tests use synthetic fixtures. Real Oracle behavior still requires integration testing against each target version, driver mode, privilege model, network, and workload.
+Python GUI tests replace the database gateway and analysis executor; frontend tests use synthetic fixtures. Live behavior still requires integration testing against each target database version, privilege model, network, and workload.
 
 ## Known limitations
 
@@ -449,7 +485,7 @@ Python GUI tests replace the Oracle gateway and analysis executor; frontend test
 - Synonyms, views, and partition-specific strategies are not analyzed yet.
 - Existing declared Foreign Keys are not emitted as newly discovered relationships.
 - GUI connection sessions, run records, and caches are intentionally in memory and disappear when the process stops.
-- Cooperative cancellation cannot terminate an Oracle call already in progress; it takes effect at the next safe boundary or timeout.
+- Cooperative cancellation cannot terminate every database call already in progress; it takes effect at the next safe boundary or timeout.
 - Large ERDs can remain visually dense even with filters, deterministic layout, and one-hop focus.
 
 ## Contributing
@@ -464,6 +500,6 @@ ReliFinder is available under the [MIT License](LICENSE).
 
 <div align="center">
 
-Built for safer Oracle schema discovery.
+Built for safer database relationship discovery.
 
 </div>

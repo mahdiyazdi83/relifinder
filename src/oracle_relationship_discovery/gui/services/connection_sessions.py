@@ -6,7 +6,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from oracle_relationship_discovery.database.base import RuntimeResource
+from oracle_relationship_discovery.database.base import DatabaseAdapter, RuntimeResource
 from oracle_relationship_discovery.models import SchemaSummary
 
 
@@ -14,9 +14,11 @@ from oracle_relationship_discovery.models import SchemaSummary
 class RuntimeCredentials:
     host: str
     port: int
-    service_name: str
+    service_name: str | None
     username: str
     _password: bytearray = field(repr=False)
+    database_type: str = "oracle"
+    database: str | None = None
 
     @classmethod
     def create(
@@ -24,11 +26,25 @@ class RuntimeCredentials:
         *,
         host: str,
         port: int,
-        service_name: str,
         username: str,
         password: str,
+        database_type: str = "oracle",
+        service_name: str | None = None,
+        database: str | None = None,
     ) -> RuntimeCredentials:
-        return cls(host, port, service_name, username, bytearray(password.encode("utf-8")))
+        return cls(
+            host,
+            port,
+            service_name,
+            username,
+            bytearray(password.encode("utf-8")),
+            database_type,
+            database,
+        )
+
+    @property
+    def type(self) -> str:
+        return self.database_type
 
     def password_text(self) -> str:
         if not self._password:
@@ -52,6 +68,8 @@ class RuntimeConnectionSession:
     created_at: float
     last_accessed_at: float
     resource: RuntimeResource | None = field(default=None, repr=False)
+    adapter: DatabaseAdapter | None = field(default=None, repr=False)
+    database_type: str = "oracle"
     leases: int = field(default=0, repr=False)
 
 
@@ -84,6 +102,8 @@ class ConnectionSessionStore:
         schemas: tuple[SchemaSummary, ...],
         *,
         resource: RuntimeResource | None = None,
+        adapter: DatabaseAdapter | None = None,
+        database_type: str = "oracle",
         replace_connection_id: str | None = None,
     ) -> RuntimeConnectionSession:
         with self._lock:
@@ -101,7 +121,9 @@ class ConnectionSessionStore:
                 oldest = min(available, key=lambda item: item.last_accessed_at)
                 self._remove_locked(oldest.connection_id)
             connection_id = self._new_id()
-            session = RuntimeConnectionSession(connection_id, schemas, now, now, resource)
+            session = RuntimeConnectionSession(
+                connection_id, schemas, now, now, resource, adapter, database_type
+            )
             self._sessions[connection_id] = session
             return session
 

@@ -13,28 +13,24 @@ from oracle_relationship_discovery.gui.services.connection_sessions import (
     SessionNotFoundError,
 )
 from oracle_relationship_discovery.gui.services.oracle_gateway import (
-    OracleGateway,
-    OracleGatewayError,
+    DatabaseGateway,
+    DatabaseGatewayError,
 )
 from oracle_relationship_discovery.models import SchemaSummary
 
-CAPABILITY_CHECKS = (
-    CapabilityCheck(key="oracle_connection", label="Oracle connection"),
-    CapabilityCheck(key="metadata_visibility", label="Metadata visibility"),
-    CapabilityCheck(key="schema_discovery", label="Schema discovery"),
-)
-
 
 class ConnectionService:
-    def __init__(self, gateway: OracleGateway, sessions: ConnectionSessionStore) -> None:
+    def __init__(self, gateway: DatabaseGateway, sessions: ConnectionSessionStore) -> None:
         self.gateway = gateway
         self.sessions = sessions
 
     def create(self, request: ConnectionCreateRequest) -> ConnectionResponse:
         credentials = RuntimeCredentials.create(
+            database_type=request.database_type,
             host=request.host,
-            port=request.port,
+            port=int(request.port),
             service_name=request.service_name,
+            database=request.database,
             username=request.username,
             password=request.password.get_secret_value(),
         )
@@ -46,16 +42,18 @@ class ConnectionService:
             session = self.sessions.create(
                 schemas,
                 resource=resource,
+                adapter=result.adapter,
+                database_type=result.database_type,
                 replace_connection_id=request.replace_connection_id,
             )
             resource = None
-        except OracleGatewayError as exc:
+        except DatabaseGatewayError as exc:
             raise ApiProblem(exc.status_code, exc.code, exc.message) from None
         except SessionBusyError:
             raise ApiProblem(
                 409,
                 "CONNECTION_SESSION_BUSY",
-                "The Oracle connection session has an active analysis run.",
+                "The database connection session has an active analysis run.",
             ) from None
         finally:
             if resource:
@@ -63,19 +61,22 @@ class ConnectionService:
             credentials.clear()
         return ConnectionResponse(
             connection_id=session.connection_id,
+            database_type=session.database_type,
             expires_in_seconds=self.sessions.idle_timeout_seconds,
-            checks=CAPABILITY_CHECKS,
+            checks=_capability_checks(result.adapter.display_name),
         )
 
     def list_schemas(self, connection_id: str) -> SchemaListResponse:
         session = self._session(connection_id)
         return SchemaListResponse(
             connection_id=session.connection_id,
+            database_type=session.database_type,
             schemas=tuple(
                 SchemaSummaryResponse(
                     name=item.name,
                     table_count=item.table_count,
                     column_count=item.column_count,
+                    system_managed=item.system_managed,
                     oracle_maintained=item.oracle_maintained,
                 )
                 for item in session.schemas
@@ -104,6 +105,14 @@ class ConnectionService:
             raise _session_problem() from None
 
 
+def _capability_checks(display_name: str) -> tuple[CapabilityCheck, ...]:
+    return (
+        CapabilityCheck(key="database_connection", label=f"{display_name} connection"),
+        CapabilityCheck(key="metadata_visibility", label="Metadata visibility"),
+        CapabilityCheck(key="schema_discovery", label="Schema discovery"),
+    )
+
+
 def _normalize_schemas(schemas: tuple[SchemaSummary, ...]) -> tuple[SchemaSummary, ...]:
     unique = {item.name: item for item in schemas}
     return tuple(unique[name] for name in sorted(unique))
@@ -113,5 +122,5 @@ def _session_problem() -> ApiProblem:
     return ApiProblem(
         404,
         "CONNECTION_SESSION_NOT_FOUND",
-        "The local Oracle connection session is missing or has expired.",
+        "The local database connection session is missing or has expired.",
     )

@@ -29,7 +29,7 @@ export function CapabilityChecks({ checks, expiresInSeconds }: CapabilityChecksP
       </ul>
       <p className="border-t border-border px-4 py-2 text-xs text-text-muted">
         Session expires after {Math.round(expiresInSeconds / 60)} minutes of inactivity. ReliFinder
-        operates with SELECT statements only; this does not prove the Oracle account itself lacks
+        operates with SELECT statements only; this does not prove the database account itself lacks
         write privileges.
       </p>
     </section>

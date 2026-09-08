@@ -99,11 +99,14 @@ def write_analysis_results(
     relationships: tuple[ErdRelationship, ...],
     analysis_mode: str,
     generated_at: str,
+    *,
+    database_type: str = "oracle",
 ) -> None:
     payload = {
         "format_version": FORMAT_VERSION,
         "generated_at": generated_at,
         "analysis_mode": analysis_mode,
+        "database_type": database_type,
         "privacy": PRIVACY_NOTICE,
         "relationships": [
             _relationship_dict(item) for item in sorted(relationships, key=_sort_key)

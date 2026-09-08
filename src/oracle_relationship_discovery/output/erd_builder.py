@@ -15,7 +15,10 @@ from oracle_relationship_discovery.output.erd_models import (
     ErdRelationship,
     ErdTable,
 )
-from oracle_relationship_discovery.output.schema_metadata import read_schema_metadata
+from oracle_relationship_discovery.output.schema_metadata import (
+    read_schema_database_type,
+    read_schema_metadata,
+)
 
 _LEGACY_REQUIRED_FIELDS = {
     "source_schema",
@@ -60,7 +63,10 @@ def _tables(tables: list[TableMetadata]) -> tuple[ErdTable, ...]:
 
 
 def build_erd_model(
-    tables: list[TableMetadata], candidates: list[RelationshipCandidate]
+    tables: list[TableMetadata],
+    candidates: list[RelationshipCandidate],
+    *,
+    database_type: str = "oracle",
 ) -> ErdModel:
     relationships = []
     for item in candidates:
@@ -102,7 +108,7 @@ def build_erd_model(
             )
         )
     relationships.sort(key=_relationship_sort_key)
-    return ErdModel(_tables(tables), tuple(relationships))
+    return ErdModel(_tables(tables), tuple(relationships), database_type)
 
 
 def resolve_offline_source(input_path: Path) -> OfflineAnalysisSource:
@@ -143,11 +149,12 @@ def load_erd_model(source_path: Path, metadata_path: Path | None = None) -> ErdM
         )
 
     tables = _tables(read_schema_metadata(metadata_path)) if metadata_path else ()
+    database_type = read_schema_database_type(metadata_path) if metadata_path else "oracle"
     if not tables:
         tables = _minimal_tables(relationships)
     else:
         tables = _merge_missing_endpoints(tables, relationships)
-    return ErdModel(tables, relationships)
+    return ErdModel(tables, relationships, database_type)
 
 
 def _read_legacy_csv(path: Path) -> tuple[ErdRelationship, ...]:

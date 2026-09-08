@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "relifinder"
 version = "0.1.0"
-description = "Read-only, explainable relationship discovery for Oracle schemas without Foreign Keys"
+description = "Read-only, explainable relationship discovery across Oracle, PostgreSQL, MySQL, and MariaDB"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.11"
@@ -48,6 +48,12 @@ dev = [
   "pytest>=8.0",
   "ruff>=0.6",
 ]
+postgres = ["psycopg[binary]>=3.2,<4"]
+mysql = ["PyMySQL>=1.1,<2"]
+databases = [
+  "psycopg[binary]>=3.2,<4",
+  "PyMySQL>=1.1,<2",
+]
 gui = [
   "fastapi>=0.141,<0.142",
   "pydantic>=2.13,<3",
@@ -64,6 +70,7 @@ packages = ["src/oracle_relationship_discovery"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+markers = ["integration: opt-in live database smoke tests"]
 
 [tool.ruff]
 target-version = "py311"

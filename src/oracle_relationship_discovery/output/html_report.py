@@ -22,6 +22,7 @@ def write_html(
     analysis_mode: str = "",
     generated_at: str = "",
     erd_exports: list[ErdExportResult] | None = None,
+    database_type: str = "oracle",
 ) -> None:
     rows = [candidate_row(candidate, analysis_mode, generated_at) for candidate in candidates]
     exports = []
@@ -89,6 +90,7 @@ def write_html(
             "mode": analysis_mode or "unknown",
             "generatedAt": generated_at,
             "erdExports": exports,
+            "databaseType": database_type,
         }
     )
     html_document = (
@@ -96,7 +98,7 @@ def write_html(
 <html lang="en" data-theme="light">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Oracle Relationship Discovery Report</title>
+<title>__DATABASE_LABEL__ Relationship Discovery Report</title>
 <style>
 :root{color-scheme:light;--bg:#f3f6fb;--bg2:#e9eef8;--panel:#fff;--panel2:#f8faff;--text:#172033;--muted:#667085;--faint:#98a2b3;--line:#e1e7f0;--accent:#5b5bd6;--accent2:#7c3aed;--accentSoft:#ededff;--high:#087a55;--highSoft:#e7f8f1;--medHigh:#3164c6;--medHighSoft:#eaf1ff;--medium:#a15c05;--mediumSoft:#fff4df;--low:#b42318;--lowSoft:#ffebe9;--shadow:0 16px 42px rgba(29,41,57,.08);--header:rgba(255,255,255,.88)}
 html[data-theme="dark"]{color-scheme:dark;--bg:#090d18;--bg2:#111827;--panel:#121827;--panel2:#171f31;--text:#edf2ff;--muted:#aab4c8;--faint:#768197;--line:#283349;--accent:#9897ff;--accent2:#c084fc;--accentSoft:#292750;--high:#55d6a5;--highSoft:#12372e;--medHigh:#82aaff;--medHighSoft:#172b52;--medium:#f4bd61;--mediumSoft:#3b2b12;--low:#ff8b83;--lowSoft:#441f25;--shadow:0 18px 46px rgba(0,0,0,.28);--header:rgba(18,24,39,.9)}
@@ -104,7 +106,7 @@ html[data-theme="dark"]{color-scheme:dark;--bg:#090d18;--bg2:#111827;--panel:#12
 </style>
 </head>
 <body><main class="shell">
-<header class="hero"><div class="topline"><div class="brand"><div class="logo" aria-hidden="true"><svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg></div><div><h1>Relationship Discovery</h1><p class="subtitle">Explainable, read-only Oracle relationship inference with privacy-preserving aggregate evidence.</p></div></div><div class="actions"><button class="button" id="theme" type="button" aria-label="Toggle color theme"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a9 9 0 1 0 9 9c-5 2-11-4-9-9Z"/></svg><span>Theme</span></button></div></div><div class="runmeta"><span class="pill"><i class="dot"></i><b id="mode"></b></span><span class="pill" id="generated"></span><span class="pill">No sampled values persisted</span></div></header>
+<header class="hero"><div class="topline"><div class="brand"><div class="logo" aria-hidden="true"><svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg></div><div><h1>Relationship Discovery</h1><p class="subtitle">Explainable, read-only __DATABASE_LABEL__ relationship inference with privacy-preserving aggregate evidence.</p></div></div><div class="actions"><button class="button" id="theme" type="button" aria-label="Toggle color theme"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a9 9 0 1 0 9 9c-5 2-11-4-9-9Z"/></svg><span>Theme</span></button></div></div><div class="runmeta"><span class="pill"><i class="dot"></i><b id="mode"></b></span><span class="pill" id="generated"></span><span class="pill">No sampled values persisted</span></div></header>
 <section class="cards" id="cards"></section>
 <section class="overview"><div class="panel chart"><div class="section-title"><h2>Confidence distribution</h2><span>reported rows</span></div><div class="bars" id="bars"></div></div><div class="panel notice"><div class="notice-icon">!</div><div><h2>Interpret scores as evidence, not proof</h2><p>Small samples are discounted. Overlap with a repeating non-key target receives only limited weight. Review ambiguous and non-key relationships before using them in an ERD or migration.</p></div></div></section>
 __ERD__<section class="panel toolbar"><div class="filters"><div class="field search"><input id="search" placeholder="Search schema, table, column, explanation…"></div><div class="field"><select id="schema"><option value="">All schemas</option></select></div><div class="field"><select id="confidence"><option value="">All confidence</option></select></div><div class="field"><select id="cardinality"><option value="">All cardinalities</option></select></div><div class="field"><select id="key"><option value="">All target keys</option></select></div><div class="field"><select id="validation"><option value="">All validation</option></select></div><button class="button" id="clear" type="button">Clear</button></div><div class="filter-foot"><span id="count"></span><span>Click a column heading to sort</span></div></section>
@@ -138,6 +140,17 @@ function render(){const q=document.getElementById('search').value.toLowerCase(),
 </script></body></html>""".replace("__DATA__", data)
         .replace("__SUMMARY__", summary)
         .replace("__ERD__", erd_section)
+        .replace(
+            "__DATABASE_LABEL__",
+            html_lib.escape(
+                {
+                    "oracle": "Oracle",
+                    "postgresql": "PostgreSQL",
+                    "mysql": "MySQL",
+                    "mariadb": "MariaDB",
+                }.get(database_type.lower(), database_type)
+            ),
+        )
     )
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(html_document, encoding="utf-8")

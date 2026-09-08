@@ -60,13 +60,13 @@ export function ExportsPage() {
       <header className="flex flex-wrap items-end gap-3 border-b border-border pb-4">
         <div>
           <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-text-muted">
-            Completed run / {runId.slice(0, 8)}
+            Completed run / {runId.slice(0, 8)} · {artifactsQuery.data!.database_type}
           </p>
           <h1 className="mt-1 text-xl font-semibold text-text" id="exports-title">
             Artifacts & DBML
           </h1>
           <p className="mt-1.5 text-sm text-text-muted">
-            Exact core-generated outputs - no Oracle connection required
+            Exact core-generated outputs - no database connection required
           </p>
         </div>
         <div className="ml-auto flex items-center border border-border text-xs">

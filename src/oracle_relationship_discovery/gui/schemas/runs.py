@@ -83,9 +83,7 @@ class RunCreateRequest(BaseModel):
     @field_validator("schemas")
     @classmethod
     def normalize_schemas(cls, values: tuple[str, ...]) -> tuple[str, ...]:
-        normalized = tuple(
-            dict.fromkeys(value.strip().upper() for value in values if value.strip())
-        )
+        normalized = tuple(dict.fromkeys(value.strip() for value in values if value.strip()))
         if not normalized:
             raise ValueError("At least one schema must be selected")
         return normalized
@@ -114,6 +112,7 @@ class RunSummary(BaseModel):
     relationships_in_report: int = Field(ge=0)
     run_mode: Literal["sampled", "metadata-only"]
     elapsed_seconds: float = Field(ge=0)
+    database_type: Literal["oracle", "postgresql", "mysql", "mariadb"] = "oracle"
 
 
 class RunProgressEvent(BaseModel):

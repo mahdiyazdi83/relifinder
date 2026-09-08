@@ -228,7 +228,7 @@ export function AnalysisConfigurationForm({
               value={configuration.sampling_mode}
             >
               <option value="first">First rows</option>
-              <option value="sample">Oracle block sample</option>
+              <option value="sample">Database-native bounded sample</option>
             </select>
           </label>
           <label className="text-xs font-medium text-text-muted">
@@ -279,7 +279,7 @@ export function AnalysisConfigurationForm({
       <div className="flex items-center justify-between gap-4 border-t border-border pt-4">
         <p className="max-w-xl text-xs leading-5 text-text-muted">
           Runs execute locally. Cancellation takes effect at safe boundaries or after the current
-          bounded Oracle call returns.
+          bounded database call returns.
         </p>
         <Button disabled={submitting} type="submit">
           {submitting ? "Starting…" : "Run Analysis"}

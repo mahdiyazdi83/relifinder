@@ -1,4 +1,4 @@
-"""Conservative, deterministic Oracle identifier similarity."""
+"""Conservative, deterministic database identifier similarity."""
 
 from __future__ import annotations
 

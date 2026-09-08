@@ -104,7 +104,12 @@ def test_config_defaults_to_oracle_and_factory_rejects_unknown_type() -> None:
     assert config.type == "oracle"
     assert adapter_for(config) is ORACLE_ADAPTER
 
-    unsupported = DatabaseConfig("host", 1521, "service", "user", "PASSWORD", type="postgresql")
+    postgresql = DatabaseConfig(
+        "host", 5432, None, "user", "PASSWORD", type="postgresql", database="app"
+    )
+    assert adapter_for(postgresql).type_name == "postgresql"
+
+    unsupported = DatabaseConfig("host", 1, "service", "user", "PASSWORD", type="db2")
     with pytest.raises(ValueError, match="Unsupported database type"):
         adapter_for(unsupported)
 
@@ -154,14 +159,30 @@ schemas: [APP]
 database:
   type: postgresql
   host: localhost
-  service_name: demo
+  database: demo
+  username: reader
+  password_env: TEST_PASSWORD
+schemas: [MixedCase]
+""".strip(),
+        encoding="utf-8",
+    )
+    postgresql = load_config(config_path)
+    assert postgresql.database.port == 5432
+    assert postgresql.schemas == ("MixedCase",)
+
+    config_path.write_text(
+        """
+database:
+  type: db2
+  host: localhost
+  database: demo
   username: reader
   password_env: TEST_PASSWORD
 schemas: [APP]
 """.strip(),
         encoding="utf-8",
     )
-    with pytest.raises(ValueError, match="database.type must be 'oracle'"):
+    with pytest.raises(ValueError, match="database.type must be one of"):
         load_config(config_path)
 
 

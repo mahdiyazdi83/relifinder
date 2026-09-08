@@ -44,7 +44,8 @@ export function ConnectionWorkspace() {
         checks: response.checks,
         host: values.host,
         port: values.port,
-        serviceName: values.service_name,
+        database_type: response.database_type ?? values.database_type,
+        databaseName: values.database_type === "oracle" ? values.service_name : values.database,
         username: values.username,
       });
       return true;
@@ -88,7 +89,7 @@ export function ConnectionWorkspace() {
         <div className="flex flex-wrap items-end gap-3">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-text" id="connection-title">
-              Secure Oracle connection
+              Secure database connection
             </h1>
             <p className="mt-1.5 max-w-2xl text-sm leading-6 text-text-muted">
               Establish an ephemeral SELECT-only session, inspect visible metadata, and define the

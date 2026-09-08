@@ -24,7 +24,7 @@ from oracle_relationship_discovery.config import (
     PerformanceConfig,
     SamplingConfig,
 )
-from oracle_relationship_discovery.database.base import DatabaseOperation
+from oracle_relationship_discovery.database.base import DatabaseAdapter, DatabaseOperation
 from oracle_relationship_discovery.gui.errors import ApiProblem
 from oracle_relationship_discovery.gui.schemas.runs import (
     AnalysisConfiguration,
@@ -103,9 +103,10 @@ class CoreAnalysisExecutor(AnalysisExecutor):
         if session.resource is None:
             raise AnalysisExecutionError(
                 "RECONNECT_REQUIRED",
-                "The Oracle runtime connection is unavailable. Reconnect before starting analysis.",
+                "The database runtime connection is unavailable. Reconnect before starting analysis.",
             )
-        config = _core_config(schemas, configuration, self.output_root)
+        adapter = session.adapter or ORACLE_ADAPTER
+        config = _core_config(schemas, configuration, self.output_root, session.database_type)
         started = datetime.now().astimezone()
         incomplete = self.output_root / ".incomplete" / run_id
         try:
@@ -117,7 +118,7 @@ class CoreAnalysisExecutor(AnalysisExecutor):
                 ),
                 progress_callback=progress_callback,
                 cancellation_token=cancellation_token,
-                database_adapter=ORACLE_ADAPTER,
+                database_adapter=adapter,
                 generated_at=started.isoformat(timespec="microseconds"),
             )
             cancellation_token.raise_if_cancelled()
@@ -133,6 +134,7 @@ class CoreAnalysisExecutor(AnalysisExecutor):
                 mode=result.mode,
                 elapsed_seconds=result.elapsed_seconds,
                 run_directory=final_path,
+                database_type=result.database_type,
             )
         except AnalysisCancelled:
             raise
@@ -141,7 +143,7 @@ class CoreAnalysisExecutor(AnalysisExecutor):
         except Exception as exc:  # noqa: BLE001 - sanitize driver and pipeline failures.
             if cancellation_token.is_cancelled:
                 raise AnalysisCancelled("Analysis cancellation was requested.") from None
-            raise _safe_execution_error(exc) from None
+            raise _safe_execution_error(exc, adapter) from None
 
 
 @dataclass(frozen=True, slots=True)
@@ -153,6 +155,7 @@ class CompletedRun:
     erd_min_confidence: float
     erd_scope: str
     erd_exclude_generic: bool
+    database_type: str = "oracle"
 
 
 @dataclass(slots=True)
@@ -190,7 +193,7 @@ class RunService:
                 raise ApiProblem(
                     409,
                     "ACTIVE_RUN_EXISTS",
-                    "This Oracle connection already has an active analysis run.",
+                    "This database connection already has an active analysis run.",
                 )
         try:
             session = self.sessions.acquire_for_run(payload.connection_id)
@@ -198,7 +201,7 @@ class RunService:
             raise ApiProblem(
                 404,
                 "CONNECTION_SESSION_NOT_FOUND",
-                "The local Oracle connection session is missing or has expired. Reconnect first.",
+                "The local database connection session is missing or has expired. Reconnect first.",
             ) from None
 
         available = {item.name for item in session.schemas}
@@ -217,7 +220,7 @@ class RunService:
                 raise ApiProblem(
                     409,
                     "ACTIVE_RUN_EXISTS",
-                    "This Oracle connection already has an active analysis run.",
+                    "This database connection already has an active analysis run.",
                 )
             self._trim_runs_locked()
             run_id = secrets.token_urlsafe(32)
@@ -279,6 +282,7 @@ class RunService:
                 erd_min_confidence=record.configuration.erd_min_confidence,
                 erd_scope=record.configuration.erd_scope,
                 erd_exclude_generic=record.configuration.erd_exclude_generic,
+                database_type=record.latest.summary.database_type,
             )
 
     def cancel(self, run_id: str) -> RunCancelResponse:
@@ -350,6 +354,7 @@ class RunService:
                 relationships_in_report=result.relationships_in_report,
                 run_mode=result.mode,
                 elapsed_seconds=result.elapsed_seconds,
+                database_type=result.database_type,
             )
             with record.condition:
                 record.completed_directory = result.run_directory
@@ -472,9 +477,18 @@ def _core_config(
     schemas: tuple[str, ...],
     values: AnalysisConfiguration,
     output_root: Path,
+    database_type: str = "oracle",
 ) -> AppConfig:
     return AppConfig(
-        database=DatabaseConfig("runtime-session", 1521, "runtime", "runtime", "UNUSED"),
+        database=DatabaseConfig(
+            "runtime-session",
+            1521,
+            "runtime" if database_type == "oracle" else None,
+            "runtime",
+            "UNUSED",
+            database_type,
+            None if database_type == "oracle" else "runtime",
+        ),
         schemas=schemas,
         analysis=AnalysisConfig(
             metadata_candidate_threshold=values.metadata_candidate_threshold,
@@ -502,6 +516,8 @@ def _core_config(
     )
 
 
-def _safe_execution_error(exc: Exception) -> AnalysisExecutionError:
-    error = ORACLE_ADAPTER.normalize_error(exc, DatabaseOperation.ANALYSIS)
+def _safe_execution_error(
+    exc: Exception, adapter: DatabaseAdapter = ORACLE_ADAPTER
+) -> AnalysisExecutionError:
+    error = adapter.normalize_error(exc, DatabaseOperation.ANALYSIS)
     return AnalysisExecutionError(error.code, error.message)

@@ -163,7 +163,7 @@ def _select(
     )
     isolated_count = len({table.key for table in tables} - endpoint_tables)
     return _Selection(
-        model=ErdModel(tables, ordered),
+        model=ErdModel(tables, ordered, model.database_type),
         input_relationships=len(model.relationships),
         duplicate_relationships_omitted=duplicate_count,
         highest_detected_confidence=highest_confidence,

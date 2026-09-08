@@ -62,6 +62,7 @@ class ArtifactService:
         manifest = self._manifest(completed)
         return ArtifactListResponse(
             run_id=run_id,
+            database_type=completed.database_type,
             artifacts=tuple(item.metadata for item in manifest.values()),
         )
 
@@ -156,6 +157,7 @@ class ArtifactService:
             )
         return DbmlRegenerationResponse(
             run_id=run_id,
+            database_type=completed.database_type,
             generated_artifact_ids=generated_ids,
             artifacts=tuple(item.metadata for item in manifest.values()),
         )

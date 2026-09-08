@@ -27,10 +27,18 @@ ENV_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 class DatabaseConfig:
     host: str
     port: int
-    service_name: str
+    service_name: str | None
     username: str
     password_env: str
     type: str = "oracle"
+    database: str | None = None
+
+    @property
+    def database_name(self) -> str:
+        value = self.service_name if self.type == "oracle" else self.database
+        if not value:
+            raise ValueError(f"Database name is required for {self.type}")
+        return value
 
     def password(self) -> str:
         value = os.environ.get(self.password_env)
@@ -116,13 +124,18 @@ def load_config(path: Path) -> AppConfig:
         raw = _expand_env(yaml.safe_load(handle) or {})
     db = raw.get("database", {})
     database_type = str(db.get("type", "oracle")).lower()
-    if database_type != "oracle":
-        raise ValueError("database.type must be 'oracle'")
-    required = ("host", "service_name", "username", "password_env")
+    supported_types = {"oracle", "postgresql", "mysql", "mariadb"}
+    if database_type not in supported_types:
+        raise ValueError("database.type must be one of: oracle, postgresql, mysql, mariadb")
+    endpoint_key = "service_name" if database_type == "oracle" else "database"
+    required = ("host", endpoint_key, "username", "password_env")
     missing = [key for key in required if not db.get(key)]
     if missing:
         raise ValueError(f"Missing database settings: {', '.join(missing)}")
-    schemas = tuple(dict.fromkeys(str(s).upper() for s in raw.get("schemas", []) if s))
+    normalize_schema = str.upper if database_type == "oracle" else str
+    schemas = tuple(
+        dict.fromkeys(normalize_schema(str(s).strip()) for s in raw.get("schemas", []) if s)
+    )
     if not schemas:
         raise ValueError("At least one schema must be configured")
 
@@ -185,14 +198,23 @@ def load_config(path: Path) -> AppConfig:
         raise ValueError("sampling.mode must be 'first' or 'sample'")
 
     log_file = output_raw.get("log_file", "logs/oracle-relationship-discovery.log")
+    database_port = int(
+        db.get(
+            "port",
+            {"oracle": 1521, "postgresql": 5432, "mysql": 3306, "mariadb": 3306}[database_type],
+        )
+    )
+    if not 1 <= database_port <= 65535:
+        raise ValueError("database.port must be between 1 and 65535")
     return AppConfig(
         database=DatabaseConfig(
             host=str(db["host"]),
-            port=int(db.get("port", 1521)),
-            service_name=str(db["service_name"]),
+            port=database_port,
+            service_name=str(db["service_name"]) if db.get("service_name") else None,
             username=str(db["username"]),
             password_env=str(db["password_env"]),
             type=database_type,
+            database=str(db["database"]) if db.get("database") else None,
         ),
         schemas=schemas,
         analysis=AnalysisConfig(
@@ -229,7 +251,11 @@ def load_config(path: Path) -> AppConfig:
             min_confidence=erd_min_confidence,
             scope=erd_scope,
             schemas=tuple(
-                dict.fromkeys(str(value).upper() for value in erd_raw.get("schemas", []) if value)
+                dict.fromkeys(
+                    normalize_schema(str(value).strip())
+                    for value in erd_raw.get("schemas", [])
+                    if value
+                )
             ),
             max_relationships=erd_max_relationships,
             exclude_generic=bool(erd_raw.get("exclude_generic", False)),

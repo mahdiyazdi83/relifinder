@@ -37,20 +37,31 @@ class MockEventSource {
 
 function renderAnalysis() {
   useWorkspaceStore.getState().clearRun();
-  useWorkspaceStore
-    .getState()
-    .setConnection({
-      connection_id: connectionId,
-      expires_in_seconds: 900,
-      checks: [],
-      host: "db.internal",
-      port: 1521,
-      serviceName: "ORCLPDB1",
-      username: "APP",
-    });
+  useWorkspaceStore.getState().setConnection({
+    connection_id: connectionId,
+    expires_in_seconds: 900,
+    checks: [],
+    host: "db.internal",
+    port: 1521,
+    database_type: "oracle",
+    databaseName: "ORCLPDB1",
+    username: "APP",
+  });
   useWorkspaceStore.getState().setSelectedSchemas([
-    { name: "CORE", table_count: 7, column_count: 39, oracle_maintained: false },
-    { name: "APP", table_count: 12, column_count: 84, oracle_maintained: false },
+    {
+      name: "CORE",
+      table_count: 7,
+      column_count: 39,
+      system_managed: false,
+      oracle_maintained: false,
+    },
+    {
+      name: "APP",
+      table_count: 12,
+      column_count: 84,
+      system_managed: false,
+      oracle_maintained: false,
+    },
   ]);
   return render(
     <AppProviders>

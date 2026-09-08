@@ -1,19 +1,36 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Eye, EyeOff, PlugZap } from "lucide-react";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 
 import { Button } from "../../components/ui/button";
 import { cn } from "../../lib/utils";
 
-const connectionSchema = z.object({
-  host: z.string().trim().min(1, "Host is required").max(255),
-  port: z.number().int().min(1, "Port must be at least 1").max(65535, "Port cannot exceed 65535"),
-  service_name: z.string().trim().min(1, "Service name is required").max(128),
-  username: z.string().trim().min(1, "Username is required").max(128),
-  password: z.string().min(1, "Password is required").max(1024),
-});
+const databaseTypes = ["oracle", "postgresql", "mysql", "mariadb"] as const;
+const defaultPorts = { oracle: 1521, postgresql: 5432, mysql: 3306, mariadb: 3306 } as const;
+
+const connectionSchema = z
+  .object({
+    database_type: z.enum(databaseTypes),
+    host: z.string().trim().min(1, "Host is required").max(255),
+    port: z.number().int().min(1, "Port must be at least 1").max(65535, "Port cannot exceed 65535"),
+    service_name: z.string().trim().max(128),
+    database: z.string().trim().max(128),
+    username: z.string().trim().min(1, "Username is required").max(128),
+    password: z.string().min(1, "Password is required").max(1024),
+  })
+  .superRefine((value, context) => {
+    const field = value.database_type === "oracle" ? "service_name" : "database";
+    if (!value[field]) {
+      context.addIssue({
+        code: "custom",
+        path: [field],
+        message:
+          value.database_type === "oracle" ? "Service name is required" : "Database is required",
+      });
+    }
+  });
 
 export type ConnectionFormValues = z.infer<typeof connectionSchema>;
 
@@ -37,12 +54,24 @@ export function ConnectionForm({
   const {
     register,
     handleSubmit,
+    control,
     resetField,
+    setValue,
     formState: { errors },
   } = useForm<ConnectionFormValues>({
     resolver: zodResolver(connectionSchema),
-    defaultValues: { host: "", port: 1521, service_name: "", username: "", password: "" },
+    defaultValues: {
+      database_type: "oracle",
+      host: "",
+      port: 1521,
+      service_name: "",
+      database: "",
+      username: "",
+      password: "",
+    },
   });
+
+  const databaseType = useWatch({ control, name: "database_type" });
 
   const submit = handleSubmit(async (values) => {
     const successful = await onSubmit(values);
@@ -54,23 +83,42 @@ export function ConnectionForm({
 
   return (
     <form className="space-y-4" noValidate onSubmit={submit}>
+      <Field label="Database engine" htmlFor="database-type">
+        <select
+          {...register("database_type", {
+            onChange: (event) => {
+              const next = event.target.value as ConnectionFormValues["database_type"];
+              setValue("port", defaultPorts[next], { shouldValidate: true });
+            },
+          })}
+          className={fieldClass}
+          disabled={isSubmitting}
+          id="database-type"
+        >
+          <option value="oracle">Oracle</option>
+          <option value="postgresql">PostgreSQL</option>
+          <option value="mysql">MySQL</option>
+          <option value="mariadb">MariaDB</option>
+        </select>
+      </Field>
+
       <div className="grid gap-4 sm:grid-cols-[1fr_7rem]">
-        <Field label="Host" error={errors.host?.message} htmlFor="oracle-host">
+        <Field label="Host" error={errors.host?.message} htmlFor="database-host">
           <input
             {...register("host")}
             autoComplete="off"
             className={fieldClass}
             disabled={isSubmitting}
-            id="oracle-host"
+            id="database-host"
             placeholder="db.internal.example"
           />
         </Field>
-        <Field label="Port" error={errors.port?.message} htmlFor="oracle-port">
+        <Field label="Port" error={errors.port?.message} htmlFor="database-port">
           <input
             {...register("port", { valueAsNumber: true })}
             className={fieldClass}
             disabled={isSubmitting}
-            id="oracle-port"
+            id="database-port"
             inputMode="numeric"
             max={65535}
             min={1}
@@ -79,37 +127,50 @@ export function ConnectionForm({
         </Field>
       </div>
 
-      <Field label="Service name" error={errors.service_name?.message} htmlFor="oracle-service">
-        <input
-          {...register("service_name")}
-          autoComplete="off"
-          className={fieldClass}
-          disabled={isSubmitting}
-          id="oracle-service"
-          placeholder="ORCLPDB1"
-        />
-      </Field>
+      {databaseType === "oracle" ? (
+        <Field label="Service name" error={errors.service_name?.message} htmlFor="service-name">
+          <input
+            {...register("service_name")}
+            autoComplete="off"
+            className={fieldClass}
+            disabled={isSubmitting}
+            id="service-name"
+            placeholder="ORCLPDB1"
+          />
+        </Field>
+      ) : (
+        <Field label="Database" error={errors.database?.message} htmlFor="database-name">
+          <input
+            {...register("database")}
+            autoComplete="off"
+            className={fieldClass}
+            disabled={isSubmitting}
+            id="database-name"
+            placeholder="application_db"
+          />
+        </Field>
+      )}
 
-      <Field label="Username" error={errors.username?.message} htmlFor="oracle-username">
+      <Field label="Username" error={errors.username?.message} htmlFor="database-username">
         <input
           {...register("username")}
           autoCapitalize="none"
           autoComplete="username"
           className={fieldClass}
           disabled={isSubmitting}
-          id="oracle-username"
+          id="database-username"
           spellCheck={false}
         />
       </Field>
 
-      <Field label="Password" error={errors.password?.message} htmlFor="oracle-password">
+      <Field label="Password" error={errors.password?.message} htmlFor="database-password">
         <div className="relative">
           <input
             {...register("password")}
             autoComplete="current-password"
             className={cn(fieldClass, "pr-10")}
             disabled={isSubmitting}
-            id="oracle-password"
+            id="database-password"
             type={passwordVisible ? "text" : "password"}
           />
           <button

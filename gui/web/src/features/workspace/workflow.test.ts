@@ -16,7 +16,8 @@ const connection = {
   checks: [],
   host: "db.internal",
   port: 1521,
-  serviceName: "ORCLPDB1",
+  database_type: "oracle" as const,
+  databaseName: "ORCLPDB1",
   username: "APP",
 };
 

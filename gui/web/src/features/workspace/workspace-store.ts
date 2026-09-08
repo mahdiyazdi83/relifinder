@@ -9,11 +9,11 @@ import type {
 
 export type SafeConnection = Pick<
   ConnectionResponse,
-  "connection_id" | "expires_in_seconds" | "checks"
+  "connection_id" | "database_type" | "expires_in_seconds" | "checks"
 > & {
   host: string;
   port: number;
-  serviceName: string;
+  databaseName: string;
   username: string;
 };
 

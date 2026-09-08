@@ -20,7 +20,7 @@ describe("ReliFinder application foundation", () => {
     renderApp();
 
     expect(screen.getByText("ReliFinder")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Secure Oracle connection" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Secure database connection" })).toBeInTheDocument();
     expect(await screen.findByText("Local Core: Healthy")).toBeInTheDocument();
   });
 

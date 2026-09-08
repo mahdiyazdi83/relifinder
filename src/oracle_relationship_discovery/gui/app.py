@@ -16,8 +16,8 @@ from oracle_relationship_discovery.gui.services.artifacts import ArtifactService
 from oracle_relationship_discovery.gui.services.connection_sessions import ConnectionSessionStore
 from oracle_relationship_discovery.gui.services.connections import ConnectionService
 from oracle_relationship_discovery.gui.services.oracle_gateway import (
-    CoreOracleGateway,
-    OracleGateway,
+    CoreDatabaseGateway,
+    DatabaseGateway,
 )
 from oracle_relationship_discovery.gui.services.results import RelationshipResultsService
 from oracle_relationship_discovery.gui.services.runs import AnalysisExecutor, RunService
@@ -25,7 +25,7 @@ from oracle_relationship_discovery.gui.services.runs import AnalysisExecutor, Ru
 
 def create_app(
     *,
-    gateway: OracleGateway | None = None,
+    gateway: DatabaseGateway | None = None,
     sessions: ConnectionSessionStore | None = None,
     analysis_executor: AnalysisExecutor | None = None,
     serve_frontend: bool = False,
@@ -33,7 +33,7 @@ def create_app(
 ) -> FastAPI:
     session_store = sessions or ConnectionSessionStore()
     connection_service = ConnectionService(
-        gateway or CoreOracleGateway(),
+        gateway or CoreDatabaseGateway(),
         session_store,
     )
     run_service = RunService(session_store, analysis_executor)
@@ -50,7 +50,7 @@ def create_app(
     app = FastAPI(
         title="ReliFinder GUI API",
         description="Local orchestration boundary for the ReliFinder GUI.",
-        version="0.6.0",
+        version="0.7.0",
         lifespan=lifespan,
     )
     app.state.artifact_service = artifact_service

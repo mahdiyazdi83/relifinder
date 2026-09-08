@@ -1,3 +1,5 @@
+# Supported types: oracle, postgresql, mysql, mariadb.
+# PostgreSQL/MySQL/MariaDB use `database:` instead of `service_name:`.
 database:
   type: oracle
   host: localhost
@@ -39,7 +41,7 @@ output:
   # One append-only comprehensive log shared by every run.
   log_file: logs/oracle-relationship-discovery.log
 
-# Optional visualization export. These are inferred logical relationships, not Oracle FKs.
+# Optional visualization export. These are inferred logical relationships, not declared database constraints.
 erd:
   enabled: false
   format: dbml

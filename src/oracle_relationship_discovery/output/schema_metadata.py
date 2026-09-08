@@ -20,10 +20,13 @@ def write_schema_metadata(
     path: Path,
     tables: list[TableMetadata],
     generated_at: str,
+    *,
+    database_type: str = "oracle",
 ) -> None:
     payload = {
         "format_version": FORMAT_VERSION,
         "generated_at": generated_at,
+        "database_type": database_type,
         "privacy": PRIVACY_NOTICE,
         "tables": [
             {
@@ -35,6 +38,7 @@ def write_schema_metadata(
                     {
                         "name": column.name,
                         "data_type": column.data_type,
+                        "data_type_family": column.data_type_family.value,
                         "data_length": column.data_length,
                         "precision": column.precision,
                         "scale": column.scale,
@@ -60,6 +64,19 @@ def write_schema_metadata(
         json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+
+
+def read_schema_database_type(path: Path) -> str:
+    """Return the source database type, defaulting legacy artifacts to Oracle."""
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise SchemaMetadataError(f"Invalid schema metadata artifact: {path}") from exc
+    value = payload.get("database_type", "oracle") if isinstance(payload, dict) else "oracle"
+    normalized = str(value).strip().lower()
+    if normalized not in {"oracle", "postgresql", "mysql", "mariadb"}:
+        raise SchemaMetadataError(f"Unsupported database_type in schema metadata: {value!r}")
+    return normalized
 
 
 def read_schema_metadata(path: Path) -> list[TableMetadata]:
@@ -133,6 +150,7 @@ def _read_column(
             table=table.name,
             name=str(raw["name"]),
             data_type=str(raw["data_type"]),
+            data_type_family=raw.get("data_type_family"),
             data_length=_optional_int(raw.get("data_length")),
             precision=_optional_int(raw.get("precision")),
             scale=_optional_int(raw.get("scale")),

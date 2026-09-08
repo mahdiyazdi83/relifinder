@@ -51,7 +51,7 @@ export function AnalysisPage() {
             Reconnect and select schemas
           </h1>
           <p className="mt-2 text-sm leading-6 text-text-muted">
-            Analysis configuration requires an active runtime Oracle session and at least one
+            Analysis configuration requires an active runtime database session and at least one
             selected schema. Completed artifacts remain available from the workflow rail.
           </p>
           <Link

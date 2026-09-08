@@ -338,6 +338,11 @@ export interface components {
         ArtifactListResponse: {
             /** Artifacts */
             artifacts: components["schemas"]["ArtifactMetadata"][];
+            /**
+             * Database Type
+             * @enum {string}
+             */
+            database_type: "oracle" | "postgresql" | "mysql" | "mariadb";
             /** Run Id */
             run_id: string;
         };
@@ -389,7 +394,7 @@ export interface components {
              * Key
              * @enum {string}
              */
-            key: "oracle_connection" | "metadata_visibility" | "schema_discovery";
+            key: "database_connection" | "metadata_visibility" | "schema_discovery";
             /** Label */
             label: string;
             /**
@@ -401,6 +406,14 @@ export interface components {
         };
         /** ConnectionCreateRequest */
         ConnectionCreateRequest: {
+            /** Database */
+            database?: string | null;
+            /**
+             * Database Type
+             * @default oracle
+             * @enum {string}
+             */
+            database_type: "oracle" | "postgresql" | "mysql" | "mariadb";
             /** Host */
             host: string;
             /**
@@ -408,15 +421,12 @@ export interface components {
              * Format: password
              */
             password: string;
-            /**
-             * Port
-             * @default 1521
-             */
-            port: number;
+            /** Port */
+            port?: number | null;
             /** Replace Connection Id */
             replace_connection_id?: string | null;
             /** Service Name */
-            service_name: string;
+            service_name?: string | null;
             /** Username */
             username: string;
         };
@@ -426,6 +436,11 @@ export interface components {
             checks: components["schemas"]["CapabilityCheck"][];
             /** Connection Id */
             connection_id: string;
+            /**
+             * Database Type
+             * @enum {string}
+             */
+            database_type: "oracle" | "postgresql" | "mysql" | "mariadb";
             /** Expires In Seconds */
             expires_in_seconds: number;
             /**
@@ -444,6 +459,11 @@ export interface components {
         DbmlRegenerationResponse: {
             /** Artifacts */
             artifacts: components["schemas"]["ArtifactMetadata"][];
+            /**
+             * Database Type
+             * @enum {string}
+             */
+            database_type: "oracle" | "postgresql" | "mysql" | "mariadb";
             /** Generated Artifact Ids */
             generated_artifact_ids: string[];
             /** Run Id */
@@ -470,6 +490,11 @@ export interface components {
         };
         /** ErdGraphResponse */
         ErdGraphResponse: {
+            /**
+             * Database Type
+             * @enum {string}
+             */
+            database_type: "oracle" | "postgresql" | "mysql" | "mariadb";
             /** Default Min Confidence */
             default_min_confidence: number;
             /** Relationships */
@@ -702,6 +727,12 @@ export interface components {
             candidates_validated: number;
             /** Columns */
             columns: number;
+            /**
+             * Database Type
+             * @default oracle
+             * @enum {string}
+             */
+            database_type: "oracle" | "postgresql" | "mysql" | "mariadb";
             /** Elapsed Seconds */
             elapsed_seconds: number;
             /** Relationships In Report */
@@ -720,6 +751,11 @@ export interface components {
         SchemaListResponse: {
             /** Connection Id */
             connection_id: string;
+            /**
+             * Database Type
+             * @enum {string}
+             */
+            database_type: "oracle" | "postgresql" | "mysql" | "mariadb";
             /** Schemas */
             schemas: components["schemas"]["SchemaSummaryResponse"][];
         };
@@ -731,6 +767,8 @@ export interface components {
             name: string;
             /** Oracle Maintained */
             oracle_maintained: boolean;
+            /** System Managed */
+            system_managed: boolean;
             /** Table Count */
             table_count: number;
         };

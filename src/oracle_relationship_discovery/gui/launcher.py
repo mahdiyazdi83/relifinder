@@ -92,7 +92,7 @@ def launch_gui(
     url = gui_url(host, port)
     if host not in LOOPBACK_HOSTS:
         print(
-            f"warning: --host {host} may expose ReliFinder and its local Oracle session "
+            f"warning: --host {host} may expose ReliFinder and its local database session "
             "to other machines. Use a firewall and trusted network.",
             file=sys.stderr,
         )

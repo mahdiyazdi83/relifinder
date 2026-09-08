@@ -86,6 +86,7 @@ class ErdRelationship:
 class ErdModel:
     tables: tuple[ErdTable, ...]
     relationships: tuple[ErdRelationship, ...]
+    database_type: str = "oracle"
 
 
 @dataclass(frozen=True, slots=True)

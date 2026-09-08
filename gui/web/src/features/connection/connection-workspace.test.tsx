@@ -10,9 +10,27 @@ import { server } from "../../test/mocks/server";
 
 const fakePassword = "fake-browser-password-9Z!";
 const schemas = [
-  { name: "APP", table_count: 12, column_count: 84, oracle_maintained: false },
-  { name: "CORE", table_count: 7, column_count: 39, oracle_maintained: false },
-  { name: "SYS", table_count: 120, column_count: 900, oracle_maintained: true },
+  {
+    name: "APP",
+    table_count: 12,
+    column_count: 84,
+    system_managed: false,
+    oracle_maintained: false,
+  },
+  {
+    name: "CORE",
+    table_count: 7,
+    column_count: 39,
+    system_managed: false,
+    oracle_maintained: false,
+  },
+  {
+    name: "SYS",
+    table_count: 120,
+    column_count: 900,
+    system_managed: true,
+    oracle_maintained: true,
+  },
 ];
 
 function installSuccessfulApi(connectionId = "opaque-session-id-12345678901234567890") {
@@ -22,9 +40,10 @@ function installSuccessfulApi(connectionId = "opaque-session-id-1234567890123456
         {
           connection_id: connectionId,
           status: "connected",
+          database_type: "oracle",
           expires_in_seconds: 900,
           checks: [
-            { key: "oracle_connection", label: "Oracle connection", status: "available" },
+            { key: "database_connection", label: "Oracle connection", status: "available" },
             { key: "metadata_visibility", label: "Metadata visibility", status: "available" },
             { key: "schema_discovery", label: "Schema discovery", status: "available" },
           ],
@@ -33,7 +52,7 @@ function installSuccessfulApi(connectionId = "opaque-session-id-1234567890123456
       ),
     ),
     http.get("/api/connections/:connectionId/schemas", ({ params }) =>
-      HttpResponse.json({ connection_id: params.connectionId, schemas }),
+      HttpResponse.json({ connection_id: params.connectionId, database_type: "oracle", schemas }),
     ),
     http.delete("/api/connections/:connectionId", () => new HttpResponse(null, { status: 204 })),
   );
@@ -76,6 +95,23 @@ describe("secure connection and schema workflow", () => {
     expect(screen.getByText("Port cannot exceed 65535")).toBeInTheDocument();
   });
 
+  it("adapts endpoint fields and default ports to the selected database", async () => {
+    const user = userEvent.setup();
+    renderApp();
+
+    await user.selectOptions(screen.getByLabelText("Database engine"), "postgresql");
+    expect(screen.getByLabelText("Port")).toHaveValue(5432);
+    expect(screen.queryByLabelText("Service name")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Database")).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText("Database engine"), "mysql");
+    expect(screen.getByLabelText("Port")).toHaveValue(3306);
+    await user.selectOptions(screen.getByLabelText("Database engine"), "mariadb");
+    expect(screen.getByLabelText("Port")).toHaveValue(3306);
+    await user.selectOptions(screen.getByLabelText("Database engine"), "oracle");
+    expect(screen.getByLabelText("Port")).toHaveValue(1521);
+    expect(screen.getByLabelText("Service name")).toBeInTheDocument();
+  });
   it("disables duplicate submission while connection verification is running", async () => {
     server.use(
       http.post("/api/connections", async () => {
@@ -167,9 +203,7 @@ describe("secure connection and schema workflow", () => {
     renderApp();
     await connect(user);
 
-    await user.click(
-      screen.getByRole("checkbox", { name: "Show Oracle-maintained system schemas" }),
-    );
+    await user.click(screen.getByRole("checkbox", { name: "Show system-managed schemas" }));
 
     expect(screen.getByText("SYS")).toBeInTheDocument();
     expect(screen.getByText("SYSTEM")).toBeInTheDocument();
@@ -197,9 +231,10 @@ describe("secure connection and schema workflow", () => {
           {
             connection_id: `opaque-session-${requestCount}-12345678901234567890`,
             status: "connected",
+            database_type: "oracle",
             expires_in_seconds: 900,
             checks: [
-              { key: "oracle_connection", label: "Oracle connection", status: "available" },
+              { key: "database_connection", label: "Oracle connection", status: "available" },
               { key: "metadata_visibility", label: "Metadata visibility", status: "available" },
               { key: "schema_discovery", label: "Schema discovery", status: "available" },
             ],
@@ -208,7 +243,7 @@ describe("secure connection and schema workflow", () => {
         );
       }),
       http.get("/api/connections/:connectionId/schemas", ({ params }) =>
-        HttpResponse.json({ connection_id: params.connectionId, schemas }),
+        HttpResponse.json({ connection_id: params.connectionId, database_type: "oracle", schemas }),
       ),
     );
     const user = userEvent.setup();

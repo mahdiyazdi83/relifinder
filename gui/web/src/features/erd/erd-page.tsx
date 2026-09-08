@@ -104,7 +104,7 @@ export function ErdPage() {
       <header className="mb-3 flex flex-wrap items-end gap-3">
         <div>
           <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-text-muted">
-            Completed run / {runId.slice(0, 8)}
+            Completed run / {runId.slice(0, 8)} · {graphQuery.data!.database_type}
           </p>
           <h1
             className="mt-1 flex items-center gap-2 text-xl font-semibold text-text"
@@ -120,7 +120,7 @@ export function ErdPage() {
           <Code2 aria-hidden="true" className="size-3.5" /> DBML & Exports
         </Link>{" "}
         <p className="max-w-xl text-right text-xs leading-5 text-text-muted">
-          Artifact-backed visualization · zero additional Oracle queries · internal unknown
+          Artifact-backed visualization · zero additional database queries · internal unknown
           cardinalities remain visible
         </p>
       </header>

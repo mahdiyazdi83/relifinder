@@ -112,6 +112,7 @@ export function ResultsPage() {
           <span>{data.summary.columns.toLocaleString()} columns</span>
           <span>{data.total.toLocaleString()} relationships</span>
           <span>{data.summary.candidates_validated.toLocaleString()} validated</span>
+          <span>db: {data.summary.database_type}</span>
           <span>mode: {data.summary.run_mode}</span>
         </div>
       </header>

@@ -20,7 +20,7 @@ export function SchemaSelector({ schemas, selected, onChange }: SchemaSelectorPr
     const query = search.trim().toLocaleUpperCase();
     return schemas.filter(
       (schema) =>
-        (showSystem || !schema.oracle_maintained) &&
+        (showSystem || !schema.system_managed) &&
         (!query || schema.name.toLocaleUpperCase().includes(query)),
     );
   }, [schemas, search, showSystem]);
@@ -92,7 +92,7 @@ export function SchemaSelector({ schemas, selected, onChange }: SchemaSelectorPr
           onChange={(event) => setShowSystem(event.target.checked)}
           type="checkbox"
         />
-        Show Oracle-maintained system schemas
+        Show system-managed schemas
       </label>
 
       {visible.length ? (
@@ -111,7 +111,7 @@ export function SchemaSelector({ schemas, selected, onChange }: SchemaSelectorPr
                 />
                 <span className="min-w-0 truncate font-mono text-xs font-medium text-text">
                   {schema.name}
-                  {schema.oracle_maintained ? (
+                  {schema.system_managed ? (
                     <span className="ml-2 border border-warning/50 px-1 py-0.5 text-[9px] text-warning">
                       SYSTEM
                     </span>

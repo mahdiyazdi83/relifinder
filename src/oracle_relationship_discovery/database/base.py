@@ -62,6 +62,10 @@ class DatabaseAdapter(Protocol):
     type_name: str
     display_name: str
 
+    def create_runtime_resource(self, **credentials: Any) -> RuntimeResource: ...
+
+    def verify_connection(self, connection: Any) -> None: ...
+
     def connection_pool(
         self,
         config: DatabaseSettings,

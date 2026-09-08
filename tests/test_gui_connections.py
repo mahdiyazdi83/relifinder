@@ -36,7 +36,7 @@ class FakeGateway:
         if self.error:
             raise self.error
         assert credentials.password_text() == FAKE_PASSWORD
-        return OracleDiscoveryResult(self.schemas)
+        return OracleDiscoveryResult(self.schemas, database_type=credentials.database_type)
 
 
 def test_connection_response_and_logs_never_expose_password(caplog) -> None:
@@ -53,6 +53,48 @@ def test_connection_response_and_logs_never_expose_password(caplog) -> None:
     assert FAKE_PASSWORD not in body["connection_id"]
     assert FAKE_PASSWORD not in caplog.text
     assert gateway.credentials[0].is_cleared
+
+
+def test_postgresql_request_uses_database_field_default_port_and_safe_response() -> None:
+    gateway = FakeGateway((SchemaSummary("MixedCase", 2, 8),))
+    payload = {
+        "database_type": "postgresql",
+        "host": "db.example.invalid",
+        "database": "application_db",
+        "username": "FAKE_USER",
+        "password": FAKE_PASSWORD,
+    }
+    with TestClient(create_app(gateway=gateway)) as client:
+        response = client.post("/api/connections", json=payload)
+        schemas = client.get(f"/api/connections/{response.json()['connection_id']}/schemas")
+
+    assert response.status_code == 201
+    assert response.json()["database_type"] == "postgresql"
+    assert gateway.credentials[0].port == 5432
+    assert gateway.credentials[0].database == "application_db"
+    assert gateway.credentials[0].service_name is None
+    assert schemas.json()["database_type"] == "postgresql"
+    assert schemas.json()["schemas"][0]["name"] == "MixedCase"
+
+
+def test_provider_specific_endpoint_validation() -> None:
+    with TestClient(create_app(gateway=FakeGateway())) as client:
+        missing_database = client.post(
+            "/api/connections",
+            json={
+                "database_type": "mysql",
+                "host": "db.example.invalid",
+                "username": "FAKE_USER",
+                "password": FAKE_PASSWORD,
+            },
+        )
+        unsupported = client.post(
+            "/api/connections",
+            json={**CONNECTION_PAYLOAD, "database_type": "db2"},
+        )
+
+    assert missing_database.status_code == 422
+    assert unsupported.status_code == 422
 
 
 def test_failed_connection_is_sanitized_and_password_is_not_logged(caplog) -> None:
@@ -96,9 +138,27 @@ def test_schema_summaries_are_sorted_deduplicated_and_metadata_only() -> None:
 
     assert response.status_code == 200
     assert response.json()["schemas"] == [
-        {"name": "APP", "table_count": 9, "column_count": 44, "oracle_maintained": False},
-        {"name": "REF", "table_count": 2, "column_count": 8, "oracle_maintained": False},
-        {"name": "SYS", "table_count": 100, "column_count": 900, "oracle_maintained": True},
+        {
+            "name": "APP",
+            "table_count": 9,
+            "column_count": 44,
+            "system_managed": False,
+            "oracle_maintained": False,
+        },
+        {
+            "name": "REF",
+            "table_count": 2,
+            "column_count": 8,
+            "system_managed": False,
+            "oracle_maintained": False,
+        },
+        {
+            "name": "SYS",
+            "table_count": 100,
+            "column_count": 900,
+            "system_managed": True,
+            "oracle_maintained": True,
+        },
     ]
 
 
@@ -137,7 +197,7 @@ def test_unknown_session_is_safe() -> None:
     assert response.json() == {
         "error": {
             "code": "CONNECTION_SESSION_NOT_FOUND",
-            "message": "The local Oracle connection session is missing or has expired.",
+            "message": "The local database connection session is missing or has expired.",
         }
     }
 

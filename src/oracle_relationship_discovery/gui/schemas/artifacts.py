@@ -26,6 +26,7 @@ class ArtifactMetadata(BaseModel):
 
 class ArtifactListResponse(BaseModel):
     run_id: str
+    database_type: Literal["oracle", "postgresql", "mysql", "mariadb"]
     artifacts: tuple[ArtifactMetadata, ...]
 
 

@@ -132,7 +132,11 @@ function WorkspaceContext() {
       <div className="mt-2 space-y-2 max-lg:mt-0">
         <ContextDot
           active={Boolean(connection)}
-          label={connection ? `${connection.username}@${connection.serviceName}` : "Offline"}
+          label={
+            connection
+              ? `${connection.database_type.toUpperCase()} · ${connection.username}@${connection.databaseName}`
+              : "Offline"
+          }
         />
         <ContextDot
           active={schemas.length > 0}

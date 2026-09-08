@@ -9,13 +9,16 @@ from oracle_relationship_discovery.analysis.service import (
     AnalysisPhase,
     AnalysisProgress,
     AnalysisResult,
+    CancellationToken,
 )
 from oracle_relationship_discovery.gui.app import create_app
 from oracle_relationship_discovery.gui.schemas.runs import AnalysisConfiguration
+from oracle_relationship_discovery.gui.services.connection_sessions import RuntimeConnectionSession
 from oracle_relationship_discovery.gui.services.oracle_gateway import OracleDiscoveryResult
 from oracle_relationship_discovery.gui.services.runs import (
     AnalysisExecutionError,
     AnalysisExecutor,
+    CoreAnalysisExecutor,
     _core_config,
 )
 from oracle_relationship_discovery.models import AnalysisStats, SchemaSummary
@@ -133,6 +136,49 @@ def test_gui_core_configuration_generates_authoritative_dbml(tmp_path: Path) -> 
     assert config.erd.min_confidence == 80
 
 
+def test_gui_core_executor_passes_the_session_adapter_to_shared_analysis(
+    monkeypatch, tmp_path: Path
+) -> None:
+    adapter = type("Adapter", (), {"type_name": "postgresql", "display_name": "PostgreSQL"})()
+    session = RuntimeConnectionSession(
+        "session-id",
+        (),
+        0,
+        0,
+        FakeResource(),
+        adapter,
+        "postgresql",
+    )
+    captured = {}
+
+    def fake_run(config, run_directory, **kwargs):
+        captured["adapter"] = kwargs["database_adapter"]
+        captured["database_type"] = config.database.type
+        run_directory.mkdir(parents=True)
+        return AnalysisResult(
+            AnalysisStats(0, 0, 0, 0, 0),
+            0,
+            "metadata-only",
+            0.01,
+            run_directory,
+            "postgresql",
+        )
+
+    monkeypatch.setattr("oracle_relationship_discovery.gui.services.runs.run_analysis", fake_run)
+    result = CoreAnalysisExecutor(tmp_path).execute(
+        run_id="run-id",
+        session=session,
+        schemas=("MixedCase",),
+        configuration=AnalysisConfiguration(),
+        progress_callback=lambda _progress: None,
+        cancellation_token=CancellationToken(),
+    )
+
+    assert captured == {"adapter": adapter, "database_type": "postgresql"}
+    assert result.database_type == "postgresql"
+    assert result.run_directory.is_dir()
+
+
 def test_run_creation_progress_and_completed_summary() -> None:
     with TestClient(create_app(gateway=RunGateway(), analysis_executor=FakeExecutor())) as client:
         connection_id = _connect(client)
@@ -152,6 +198,7 @@ def test_run_creation_progress_and_completed_summary() -> None:
         "relationships_in_report": 11,
         "run_mode": "sampled",
         "elapsed_seconds": 1.25,
+        "database_type": "oracle",
     }
 
 

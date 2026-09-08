@@ -32,7 +32,14 @@ class OracleAdapter:
         )
 
     def create_runtime_resource(self, **credentials):
-        return create_pool_with_credentials(**credentials)
+        return create_pool_with_credentials(
+            host=credentials["host"],
+            port=credentials["port"],
+            service_name=credentials["service_name"],
+            username=credentials["username"],
+            password=credentials["password"],
+            max_connections=credentials.get("max_connections", 8),
+        )
 
     def verify_connection(self, connection: Any) -> None:
         with connection.cursor() as cursor:

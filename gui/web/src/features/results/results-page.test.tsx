@@ -73,6 +73,7 @@ const summary = {
   relationships_in_report: 2,
   run_mode: "sampled",
   elapsed_seconds: 12.5,
+  database_type: "oracle",
 } satisfies RelationshipListResponse["summary"];
 
 const listResponse: RelationshipListResponse = {

@@ -51,6 +51,7 @@ class AnalysisResult:
     mode: str
     elapsed_seconds: float
     run_directory: Path
+    database_type: str = "oracle"
 
 
 class AnalysisCancelled(RuntimeError):
@@ -218,13 +219,20 @@ def run_analysis(
     token.raise_if_cancelled()
     emit(AnalysisPhase.WRITING_ARTIFACTS, "Writing completed-run artifacts", stats=final_stats)
     mode = "sampled" if config.sampling.enabled else "metadata-only"
-    erd_model = build_erd_model(tables, candidates)
-    write_schema_metadata(run_directory / "schema-metadata.json", tables, generated_at)
+    database_type = adapter.type_name
+    erd_model = build_erd_model(tables, candidates, database_type=database_type)
+    write_schema_metadata(
+        run_directory / "schema-metadata.json",
+        tables,
+        generated_at,
+        database_type=database_type,
+    )
     write_analysis_results(
         run_directory / "analysis-results.json",
         erd_model.relationships,
         mode,
         generated_at,
+        database_type=database_type,
     )
     erd_results = []
     if config.erd.enabled:
@@ -251,6 +259,7 @@ def run_analysis(
         analysis_mode=mode,
         generated_at=generated_at,
         erd_exports=erd_results,
+        database_type=database_type,
     )
     return AnalysisResult(
         stats=stats,
@@ -258,4 +267,5 @@ def run_analysis(
         mode=mode,
         elapsed_seconds=round(time.monotonic() - started, 3),
         run_directory=run_directory,
+        database_type=database_type,
     )

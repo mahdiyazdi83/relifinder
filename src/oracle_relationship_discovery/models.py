@@ -94,6 +94,10 @@ class SchemaSummary:
     column_count: int
     oracle_maintained: bool = False
 
+    @property
+    def system_managed(self) -> bool:
+        return self.oracle_maintained
+
 
 @dataclass(frozen=True, slots=True)
 class ScoreBreakdown:
